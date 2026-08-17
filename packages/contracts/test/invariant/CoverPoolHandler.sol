@@ -117,8 +117,16 @@ contract CoverPoolHandler is CommonBase, StdUtils {
         uint256 policyId = _policy(policySeed);
         uint256 reserved = pool.coverOf(policyId);
         if (reserved == 0) return;
-        // Bounded above the reservation so the over-payout revert stays reachable.
-        amount = bound(amount, 1, reserved + 1);
+        // Bounded well above the reservation rather than one wei past it, so the over-payout revert
+        // is exercised at a realistic magnitude instead of at the smallest value that reaches it.
+        //
+        // Note what this does *not* buy: deleting the cap in `payClaim` leaves every invariant here
+        // green at either bound. Over-paying a claim does not make the pool insolvent — `payClaim`
+        // drops `outstandingCover` alongside `capital`, and `reserveCover` is gated on free capital,
+        // so the book stays covered. It is theft from the providers, not insolvency, and no solvency
+        // property can see it. That guard is asserted directly in `test/unit/CoverPool.t.sol`, which
+        // is where a specific-input rejection belongs.
+        amount = bound(amount, 1, reserved * 2 + 1);
         pool.payClaim(policyId, _actor(actorSeed), amount);
     }
 

@@ -72,6 +72,22 @@ interface ICoverPolicy {
     /// @notice Block from which this policy's cover is live.
     function activeFromBlock(uint256 policyId) external view returns (uint64);
 
+    /// @notice Mint a policy and lock the capital behind it in the same transaction.
+    /// @dev Restricted to `VAULT_ROLE`. Reverts rather than partially filling if the pool cannot
+    ///      back the cover or the per-reserve daily cap binds.
+    function mintPolicy(
+        address to,
+        address reserve,
+        uint256 coverAmount,
+        uint64 endBlock,
+        uint256 premiumRateRay,
+        bytes32 quoteHash,
+        bytes32 termsHash
+    ) external returns (uint256 policyId);
+
+    /// @notice Cancel an active policy, releasing the capital behind it.
+    function cancel(uint256 policyId) external;
+
     /// @notice Move an active policy to Claimable after a trigger has been established.
     /// @dev Restricted to `CLAIM_ROLE`, held by ClaimResolver, which has no discretion.
     function markClaimable(uint256 policyId) external;

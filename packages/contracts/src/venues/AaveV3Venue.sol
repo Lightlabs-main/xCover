@@ -117,12 +117,21 @@ contract AaveV3Venue is IYieldVenue, AccessControl {
     function observeReserve(address reserve, address aToken_)
         external
         view
-        returns (uint256 deficit, uint256 price, uint256 redeemableLiquidity)
+        returns (
+            uint256 deficit,
+            uint256 price,
+            uint256 redeemableLiquidity,
+            uint256 totalSupplied
+        )
     {
         return (
             aavePool.getReserveDeficit(reserve),
             oracle.getAssetPrice(reserve),
-            IERC20(reserve).balanceOf(aToken_)
+            IERC20(reserve).balanceOf(aToken_),
+            // The aToken's total supply is everything supplied to the reserve, so it is the
+            // denominator the deficit has to be judged against. Read live: it rebases with
+            // interest, and a stale denominator would misstate the share.
+            IERC20(aToken_).totalSupply()
         );
     }
 

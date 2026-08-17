@@ -66,6 +66,13 @@ contract DeployMainnet is DeployBase {
             // $0.97, same reasoning and same evidence as testnet: the live oracle read $0.99896524
             // under normal conditions, about 10 bp off peg.
             depegLowerBound: 97_000_000,
+            // 0.5% of the reserve unbacked. Measured on Ethereum Aave V3 on 17 Aug 2026: 27 of 67
+            // reserves carried a nonzero deficit simultaneously — USDT at 0.0000028 bp of its
+            // reserve, DAI at 0.2 bp — while a materially damaged reserve, WETH, read 243 bp. This
+            // floor sits eight orders of magnitude above the noise and well under a real solvency
+            // event. Without it any dust deficit pays full cover on every policy.
+            deficitFloorBps: 50,
+            // Redeemable liquidity below 1x the cover written is a redemption failure.
             liquidityFloorBps: 10_000
         });
 

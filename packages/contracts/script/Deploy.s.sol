@@ -51,6 +51,7 @@ abstract contract DeployBase is Script {
         uint64 minSamples;
         uint256 depegLowerBound;
         uint256 liquidityFloorBps;
+        uint256 deficitFloorBps;
     }
 
     /// @notice Both networks produce a block per second, measured over 500 blocks on 2026-08-17.
@@ -111,7 +112,8 @@ abstract contract DeployBase is Script {
             windowBlocks: p.windowBlocks,
             minSamples: p.minSamples,
             depegLowerBound: p.depegLowerBound,
-            liquidityFloorBps: p.liquidityFloorBps
+            liquidityFloorBps: p.liquidityFloorBps,
+            deficitFloorBps: p.deficitFloorBps
         });
         d.termsHash = keccak256(abi.encode(terms));
         vault.setTermsHash(d.termsHash);
@@ -150,6 +152,7 @@ abstract contract DeployBase is Script {
         console2.log("minSamples      ", terms.minSamples);
         console2.log("depegLowerBound ", terms.depegLowerBound);
         console2.log("liquidityFloorBps", terms.liquidityFloorBps);
+        console2.log("deficitFloorBps ", terms.deficitFloorBps);
         console2.log("termsHash       ", vm.toString(d.termsHash));
     }
 

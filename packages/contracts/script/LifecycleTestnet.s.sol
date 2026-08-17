@@ -57,6 +57,7 @@ contract LifecycleTestnet is Script {
     uint64 internal constant MIN_SAMPLES = 5;
     uint256 internal constant DEPEG_LOWER_BOUND = 97_000_000;
     uint256 internal constant LIQUIDITY_FLOOR_BPS = 10_000;
+    uint256 internal constant DEFICIT_FLOOR_BPS = 50;
 
     function _load() internal view returns (Addrs memory a) {
         string memory json = vm.readFile("../../deployments/xlayer-testnet.json");
@@ -78,7 +79,8 @@ contract LifecycleTestnet is Script {
             windowBlocks: WINDOW_BLOCKS,
             minSamples: MIN_SAMPLES,
             depegLowerBound: DEPEG_LOWER_BOUND,
-            liquidityFloorBps: LIQUIDITY_FLOOR_BPS
+            liquidityFloorBps: LIQUIDITY_FLOOR_BPS,
+            deficitFloorBps: DEFICIT_FLOOR_BPS
         });
     }
 

@@ -60,10 +60,19 @@ interface IYieldVenue {
     /// @return deficit Unbacked obligations the venue records against `reserve`.
     /// @return price The venue's oracle price for `reserve`, 8 decimals, `1e8` at peg.
     /// @return redeemableLiquidity Underlying actually available to redeem right now.
+    /// @return totalSupplied Everything supplied to the reserve, deficit included. The denominator
+    ///         the deficit is judged against: a deficit is only meaningful as a share of the
+    ///         reserve it sits in, and an absolute figure cannot distinguish a rounding artefact
+    ///         from an insolvency.
     function observeReserve(address reserve, address aToken)
         external
         view
-        returns (uint256 deficit, uint256 price, uint256 redeemableLiquidity);
+        returns (
+            uint256 deficit,
+            uint256 price,
+            uint256 redeemableLiquidity,
+            uint256 totalSupplied
+        );
 
     /// @notice Supply `assets` to the venue, pulled from the caller.
     function deposit(uint256 assets) external returns (uint256 supplied);

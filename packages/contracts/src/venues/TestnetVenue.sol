@@ -83,10 +83,13 @@ contract TestnetVenue is IYieldVenue, AccessControl {
     function observeReserve(address reserve, address)
         external
         view
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256)
     {
         if (reserve != address(asset)) revert UnknownReserve(reserve);
-        return (deficit, reportedPrice, asset.balanceOf(address(this)));
+        // `deposited` is everything owed to depositors, deficit included — the same quantity an
+        // aToken's total supply represents on Aave, and the denominator the deficit is judged
+        // against.
+        return (deficit, reportedPrice, asset.balanceOf(address(this)), deposited);
     }
 
     /// @notice Write off `amount` of the venue's holdings, creating a real deficit.

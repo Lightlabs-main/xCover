@@ -18,6 +18,8 @@ import {IYieldVenue} from "../../src/interfaces/IYieldVenue.sol";
 contract StubVenue is IYieldVenue {
     uint256 public deficit;
     uint256 public price;
+    /// @notice The reserve the deficit is a share of. Zero means no reserve, hence no deficit share.
+    uint256 public totalSupplied;
 
     IERC20 public asset;
 
@@ -25,8 +27,12 @@ contract StubVenue is IYieldVenue {
         asset = asset_;
     }
 
-    function setDeficit(uint256 v) external {
-        deficit = v;
+    /// @notice Set the deficit and the reserve it sits in, which together decide the payout.
+    /// @dev Both are required because a deficit alone says nothing: the resolver judges it as a
+    ///      share of the reserve. Passing equal values describes a wholly unbacked reserve.
+    function setReserve(uint256 deficit_, uint256 totalSupplied_) external {
+        deficit = deficit_;
+        totalSupplied = totalSupplied_;
     }
 
     function setPrice(uint256 v) external {
@@ -39,9 +45,9 @@ contract StubVenue is IYieldVenue {
     function observeReserve(address reserve, address aToken)
         external
         view
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256)
     {
-        return (deficit, price, IERC20(reserve).balanceOf(aToken));
+        return (deficit, price, IERC20(reserve).balanceOf(aToken), totalSupplied);
     }
 
     function venueName() external pure returns (string memory) {

@@ -59,6 +59,7 @@ contract ClaimResolver is AccessControl {
         uint64 minSamples; // and be witnessed at least this many times within them
         uint256 depegLowerBound; // oracle price below this is a depeg, 8 decimals
         uint256 liquidityFloorBps; // redeemable liquidity below this share of cover is a failure
+        uint256 deficitFloorBps; // deficit below this share of the reserve is not a covered loss
     }
 
     /// @notice One reading of the chain, taken at the block it names.
@@ -67,6 +68,7 @@ contract ClaimResolver is AccessControl {
         uint256 deficit; // unbacked obligations the venue records against the reserve
         uint256 price; // the venue's oracle price for the reserve, 8 decimals
         uint256 redeemableLiquidity; // underlying actually available to redeem
+        uint256 totalSupplied; // everything supplied to the reserve — the deficit's denominator
     }
 
     ICoverPool public immutable pool;
@@ -94,7 +96,8 @@ contract ClaimResolver is AccessControl {
         uint64 indexed blockNumber,
         uint256 deficit,
         uint256 price,
-        uint256 redeemableLiquidity
+        uint256 redeemableLiquidity,
+        uint256 totalSupplied
     );
     event ClaimTriggered(uint256 indexed policyId, Trigger trigger, uint256 payout);
     event ClaimSettled(uint256 indexed policyId, address indexed to, uint256 amount);
@@ -132,21 +135,26 @@ contract ClaimResolver is AccessControl {
             revert ObservationAlreadyRecorded(uint64(block.number));
         }
 
-        (uint256 deficit, uint256 price, uint256 redeemableLiquidity) =
-            venue.observeReserve(reserve, aToken);
+        (
+            uint256 deficit,
+            uint256 price,
+            uint256 redeemableLiquidity,
+            uint256 totalSupplied
+        ) = venue.observeReserve(reserve, aToken);
 
         Observation memory o = Observation({
             blockNumber: uint64(block.number),
             deficit: deficit,
             price: price,
-            redeemableLiquidity: redeemableLiquidity
+            redeemableLiquidity: redeemableLiquidity,
+            totalSupplied: totalSupplied
         });
 
         obs.push(o);
         index = obs.length - 1;
 
         emit ObservationRecorded(
-            reserve, o.blockNumber, o.deficit, o.price, o.redeemableLiquidity
+            reserve, o.blockNumber, o.deficit, o.price, o.redeemableLiquidity, o.totalSupplied
         );
     }
 
@@ -227,6 +235,11 @@ contract ClaimResolver is AccessControl {
         bool depegHeld = true;
         bool illiquidityHeld = true;
 
+        // The smallest deficit share witnessed inside the window. The trigger asserts the condition
+        // held *throughout*, so the payout is what was true at every sample — a one-block spike
+        // cannot inflate it, and a partial recovery is reflected rather than ignored.
+        uint256 minDeficitBps = type(uint256).max;
+
         // Walk backwards: the window is at the end of the array, so this touches only the recent
         // observations rather than the whole history.
         for (uint256 i = obs.length; i > 0; i--) {
@@ -234,7 +247,11 @@ contract ClaimResolver is AccessControl {
             if (o.blockNumber < windowStart) break;
 
             samples++;
-            if (o.deficit == 0) deficitHeld = false;
+
+            uint256 deficitBps = _deficitBps(o);
+            if (deficitBps < terms.deficitFloorBps || deficitBps == 0) deficitHeld = false;
+            if (deficitBps < minDeficitBps) minDeficitBps = deficitBps;
+
             if (o.price >= terms.depegLowerBound) depegHeld = false;
             if (o.redeemableLiquidity >= (coverAmount * terms.liquidityFloorBps) / 10_000) {
                 illiquidityHeld = false;
@@ -243,13 +260,62 @@ contract ClaimResolver is AccessControl {
 
         if (samples < terms.minSamples) revert InsufficientSamples(samples, terms.minSamples);
 
-        // Ordered by severity of the loss they represent, so a reserve that is both in deficit
-        // and illiquid settles on the deficit — the condition that actually destroyed value.
-        if (deficitHeld) return (Trigger.ReserveDeficit, coverAmount);
-        if (illiquidityHeld) return (Trigger.RedemptionFailure, coverAmount);
-        if (depegHeld) return (Trigger.OracleFailure, _depegPayout(terms, coverAmount));
+        // Settle on whichever covered event that actually held implies the largest loss, rather
+        // than on a fixed order of severity. Since a deficit now pays in proportion to its size, a
+        // fixed order would let a small-but-qualifying deficit mask a total redemption failure and
+        // settle a full loss for a fraction of it.
+        Trigger trigger = Trigger.None;
+        uint256 payout = 0;
 
-        return (Trigger.None, 0);
+        if (deficitHeld) {
+            trigger = Trigger.ReserveDeficit;
+            payout = (coverAmount * minDeficitBps) / 10_000;
+            if (payout > coverAmount) payout = coverAmount;
+        }
+        if (illiquidityHeld && coverAmount > payout) {
+            trigger = Trigger.RedemptionFailure;
+            payout = coverAmount;
+        }
+        if (depegHeld) {
+            uint256 depeg = _depegPayout(terms, coverAmount);
+            if (depeg > payout) {
+                trigger = Trigger.OracleFailure;
+                payout = depeg;
+            }
+        }
+
+        // A qualifying condition that computes to a zero payout is not a claim. Marking a policy
+        // Claimable and then settling it for nothing would consume the position and pay the holder
+        // nothing at all.
+        if (payout == 0) return (Trigger.None, 0);
+
+        return (trigger, payout);
+    }
+
+    /// @notice A reserve's deficit as a share of the reserve, in basis points.
+    ///
+    /// @dev **Why a share and not an absolute figure, with the evidence.** A deficit is Aave's record
+    ///      of bad debt, created whenever a liquidation leaves an account with zero collateral and
+    ///      non-zero debt. That is routine, not exceptional, and it is only cleared by a permissioned
+    ///      Umbrella call with no time constraint — so once nonzero it stays nonzero indefinitely.
+    ///      Measured on Ethereum Aave V3 on 17 August 2026: **27 of 67 reserves carried a nonzero
+    ///      deficit at the same moment**, including USDT at 0.830980 against 2,971,945,009 supplied
+    ///      — 0.000000028% of the reserve — and cbBTC at literally one satoshi.
+    ///
+    ///      Treating any nonzero deficit as a total loss, as this contract first did, would have paid
+    ///      full cover on every active policy against an implied depositor loss of roughly one part
+    ///      in 3.6 billion. Worse, it would have looked correct until it fired: X Layer's reserves
+    ///      all read zero today only because that market is young.
+    ///
+    ///      So the deficit is judged the way the depeg already is — as a proportion of the loss
+    ///      actually suffered, with a floor that clears the noise. Below `deficitFloorBps` there is
+    ///      no covered event; above it, the payout is the depositor's pro-rata share of the hole.
+    ///
+    ///      Returns zero when nothing is supplied, which is the only honest answer: there is no
+    ///      reserve for a deficit to be a share of.
+    function _deficitBps(Observation storage o) internal view returns (uint256) {
+        if (o.totalSupplied == 0 || o.deficit == 0) return 0;
+        return (o.deficit * 10_000) / o.totalSupplied;
     }
 
     /// @dev A depeg pays the shortfall against peg, not the whole position: the depositor still

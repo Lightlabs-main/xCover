@@ -127,7 +127,7 @@ contract TestnetVenueTest is Test {
         vm.prank(vault);
         venue.deposit(50_000e6);
 
-        (uint256 deficit, uint256 price, uint256 liquidity) =
+        (uint256 deficit, uint256 price, uint256 liquidity,) =
             venue.observeReserve(address(asset), address(0));
 
         assertEq(deficit, 0, "a venue that has lost nothing reports a deficit");
@@ -153,7 +153,7 @@ contract TestnetVenueTest is Test {
 
         venue.induceDeficit(address(asset), 20_000e6);
 
-        (uint256 deficit,, uint256 liquidity) = venue.observeReserve(address(asset), address(0));
+        (uint256 deficit,, uint256 liquidity,) = venue.observeReserve(address(asset), address(0));
         assertEq(deficit, 20_000e6, "deficit not recorded");
         assertEq(liquidity, 30_000e6, "assets did not actually leave the venue");
         assertEq(asset.balanceOf(venue.DEFICIT_SINK()), 20_000e6, "assets were not written off");
@@ -190,7 +190,7 @@ contract TestnetVenueTest is Test {
 
     function test_ReportedPriceMovesForTheDepegTrigger() public {
         venue.setReportedPrice(address(asset), 90_000_000);
-        (, uint256 price,) = venue.observeReserve(address(asset), address(0));
+        (, uint256 price,,) = venue.observeReserve(address(asset), address(0));
         assertEq(price, 90_000_000);
     }
 

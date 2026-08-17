@@ -338,6 +338,17 @@ test's subject changes, re-run its mutation rather than trusting the note that
 says it was checked once. Fixed by making the dip sub-floor but non-zero, so the
 rejection has to come from the rule the test names.
 
+**An invariant cannot see a bug that is not a violation of it.** `payClaim`'s cap
+on the payout had no test at all: `CoverPool` was covered only by the invariant
+suites, and the handler bounded the payout to `reserved + 1`, so the fuzzer could
+overpay by at most one wei — invisible against capital in the millions. Deleting
+the cap left every invariant green. Widening the bound does not fix it either,
+because over-paying is not insolvency: `payClaim` drops `outstandingCover`
+alongside `capital` and `reserveCover` is gated on free capital, so the book stays
+covered. It is theft from the providers, and no solvency property can express that.
+A guard that rejects a specific input needs a test that supplies that input —
+`test/unit/CoverPool.t.sol`. Invariants and unit tests are not substitutes.
+
 **Mutation-check every test that asserts an absence.** Break the thing on purpose,
 confirm the test fails, restore. Done for both solvency invariants, the resolver's
 window sampling, and the bytecode scans. A test that has never been seen to fail

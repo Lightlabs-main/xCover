@@ -327,6 +327,17 @@ Aave Pool reads is the ERC-1967 implementation pointer. The fork test's slot
 search must skip it, and must probe with a low-level `staticcall` so a bad guess
 cannot abort the search before the original value is restored.
 
+**A mutation check expires when the code around it changes.** The window-sampling
+tests dipped the deficit to zero for one block and asserted no payout. That was
+mutation-checked when written and genuinely proved the window rule — until the
+deficit payout became pro-rata. A zero-deficit sample makes the smallest share in
+the window zero, so the payout rounds to nothing and the zero-payout guard
+rejects the claim by itself; the entire sampling rule could then be deleted with
+both tests still green. Nothing failed, so nothing drew attention to it. When a
+test's subject changes, re-run its mutation rather than trusting the note that
+says it was checked once. Fixed by making the dip sub-floor but non-zero, so the
+rejection has to come from the rule the test names.
+
 **Mutation-check every test that asserts an absence.** Break the thing on purpose,
 confirm the test fails, restore. Done for both solvency invariants, the resolver's
 window sampling, and the bytecode scans. A test that has never been seen to fail

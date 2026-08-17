@@ -331,19 +331,46 @@ contract ClaimResolverTest is Test {
         assertEq(resolver.claimAmount(id), 1_000e6, "the larger loss did not settle");
     }
 
-    /// @dev The whole point of windowed sampling. One clean reading inside the window means the
-    ///      condition was not sustained, and a flash-loan-shaped blip must not pay.
+    /// @dev The whole point of windowed sampling. One reading inside the window that does not
+    ///      qualify means the condition was not sustained, and a flash-loan-shaped blip must not
+    ///      pay.
+    ///
+    ///      **The dip is deliberately sub-floor rather than zero.** With a zero-deficit block the
+    ///      smallest share in the window is zero, so the payout rounds to nothing and the
+    ///      zero-payout guard rejects the claim on its own — the sampling logic could be removed
+    ///      entirely and this test would still pass. That is what it did after the payout became
+    ///      pro-rata: it kept passing while proving nothing, having been mutation-checked against
+    ///      the earlier full-cover code. A non-zero sub-floor dip forces the rejection to come from
+    ///      the window rule itself.
+    function test_ASingleNonQualifyingSampleDefeatsTheTrigger() public {
+        uint256 id = _mint();
+
+        _setDeficitBps(1_000);
+        _observe(MIN_SAMPLES - 1);
+
+        // One block where the deficit is real but below the floor.
+        _setDeficitBps(DEFICIT_FLOOR_BPS - 1);
+        _observe(1);
+
+        _setDeficitBps(1_000);
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+    }
+
+    /// @dev And the same with the deficit fully absent for one block, which is the flash-loan
+    ///      shape. Kept alongside the sub-floor case because the two reject by different routes.
     function test_ASingleCleanSampleDefeatsTheTrigger() public {
         uint256 id = _mint();
 
-        venue.setReserve(1_000e6, 1_000e6);
+        _setDeficitBps(1_000);
         _observe(MIN_SAMPLES - 1);
 
-        // One block where the deficit is absent.
         venue.setReserve(0, 0);
         _observe(1);
 
-        venue.setReserve(1_000e6, 1_000e6);
+        _setDeficitBps(1_000);
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));

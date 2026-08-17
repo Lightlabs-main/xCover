@@ -403,8 +403,11 @@ contract ClaimPayoutForkTest is Test {
         _plantDeficitBps(500);
         _observe(MIN_SAMPLES - 1);
 
-        // The deficit clears for a single block inside the window.
-        _plantDeficit(XLayerAddresses.USDT, 0);
+        // For a single block inside the window the deficit falls below the floor. Sub-floor rather
+        // than zero on purpose: a zero-deficit block makes the smallest share in the window zero, so
+        // the payout rounds to nothing and the zero-payout guard would reject the claim by itself
+        // — the window rule could be deleted and this test would still pass.
+        _plantDeficitBps(DEFICIT_FLOOR_BPS - 1);
         _observe(1);
 
         _plantDeficitBps(500);

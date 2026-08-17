@@ -1,0 +1,19 @@
+{
+  "name": "xcover",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Depositor cover for Aave V3 on X Layer, priced per-block by an agent that may decline to quote, minted in the same transaction as the deposit.",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:contracts": "cd packages/contracts && forge test -vv",
+    "verify:chain": "cd packages/contracts && forge script script/VerifyIntegration.s.sol --rpc-url $XLAYER_MAINNET_RPC"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
+  }
+}

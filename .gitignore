@@ -1,0 +1,32 @@
+node_modules/
+dist/
+build/
+out/
+cache/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Secrets. Deployer and pricer keys live only in .env.
+.env
+.env.*
+!.env.example
+
+# Foundry
+packages/contracts/out/
+packages/contracts/cache/
+# Dry runs only. Real broadcast records stay tracked: they carry the tx hashes
+# and block numbers that evidence the testnet-before-mainnet sequence, which is
+# an eligibility requirement, not a nicety.
+packages/contracts/broadcast/**/dry-run/
+
+# Foundry libraries are tracked as submodules and pinned by foundry.lock, so a
+# clean clone builds at the exact revisions this code was tested against.
+# Everything under lib/ is third party; xCover's own code is in src/.
+
+# Benchmark scoring checkpoints. Transient: they let an interrupted scoring run
+# resume without re-paying for rows already scored, and are removed on a clean
+# finish. The scored corpus itself is committed evidence.
+bench/data/.checkpoint-*.jsonl
+
+.DS_Store

@@ -1,0 +1,110 @@
+# xCover — Progress & Handoff
+
+**Single source of truth for scope:** `docs/SPEC.md`. Read §1 before every
+session. If this file and the spec disagree, the spec wins and this file is
+stale — fix it.
+
+**Submission:** X Layer AI Season. Target **20 August 2026**; deadline 21 August
+23:59 UTC. Today: 17 August 2026.
+
+---
+
+## Current state
+
+| Area | State |
+|---|---|
+| `docs/SPEC.md` | Complete — §1–12, treated as binding |
+| Git repository | Initialised (`main`), **no commits yet** — awaiting lightlabs email |
+| Monorepo scaffold | pnpm workspace + Foundry project building |
+| Chain verification (§3.3) | **Done, all five calls, recorded in `docs/chain-verification.md`** |
+| Testnet probe (§3.5) | **Done — Aave absent from testnet, `TestnetVenue` required** |
+| `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
+| Contracts | Only `XLayerAddresses.sol`; no product contracts written |
+| Pricing agent | None written |
+| Benchmark corpus | Not started |
+| Frontend | Not started |
+| X account | Not created |
+
+The day-one verification has been executed against live X Layer mainnet. No
+product contract has run against a real dependency yet; per §1.3 nothing below
+the verification line may be marked done until it has.
+
+## Settled by chain verification
+
+Full evidence in `docs/chain-verification.md`. The decisions these force:
+
+- **`getReserveDeficit` exists and returns cleanly** (returns `0`, no revert;
+  pool revision 11). The deficit trigger is buildable as specified. **The
+  redemption-failure fallback is not needed as primary** — do not build toward
+  it.
+- **`POOL_IMPL` on chain matches the address book**, read from the ERC-1967 slot.
+- **USDT reserve is active, unfrozen, 6 decimals, 50.2M supplied.** Real
+  depositors; cover is written against something that exists.
+- **Oracle live at $0.99896524.** Note the ~10 bp off-peg in normal conditions:
+  the depeg threshold must sit well outside that or it fires on noise. Input to
+  `bench/threshold-derivation.md`.
+- **Aave is not on X Layer testnet** (`0x` code at `POOL` and
+  `POOL_ADDRESSES_PROVIDER`). `IYieldVenue` + `TestnetVenue` is **required**,
+  not optional.
+- **Testnet chain id is 1952, not 195.** 195 is deprecated on ChainList. Use
+  1952 everywhere — foundry config, frontend chain config, deployment records.
+- RPC rate limit is **100 rps per IP** on both networks. This constrains keeper
+  polling frequency (§5.5); design for it rather than discovering it in
+  production.
+
+---
+
+## Immediate next actions
+
+1. **Supply the lightlabs email**, then set `user.name` / `user.email` on the
+   repo and make the first commit. Nothing is committed yet. See §1.4 and the
+   commit-conventions memory — no AI attribution, no schedule words, ever.
+2. **Write the solvency invariant test before `CoverPool`.** The invariant
+   defines the contract, not the reverse (§12.3). This is the one test that must
+   never be cut.
+3. `CoverPool` + `CoverPolicy` against that invariant, then `IYieldVenue` +
+   `TestnetVenue` — now known to be required.
+4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
+   hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
+   Testnet must provably precede mainnet; it is an eligibility gate.
+5. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
+   threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
+6. Create the X account and publish the first build post.
+
+---
+
+## Open questions for the owner
+
+- Exact **lightlabs** git email — needed before the first commit.
+- Source of real capital for the mainnet pool and the live covered position
+  (§11 requires both to be real).
+- Testnet OKB for the deployer: the OKX faucet gives 0.01 OKB/day, which may
+  need starting now to cover the full testnet deployment set.
+
+---
+
+## Blocked
+
+- First commit, on the lightlabs email.
+- Nothing else. The §3.3 and §3.5 unknowns that gated the contract work are
+  resolved.
+
+---
+
+## Things that must not be cut
+
+From §8 contingency order. If time is short, reduce the benchmark size (never
+drop it), then the capital-provider UI, then keeper frequency. **Never reduce:**
+the solvency invariant test, the fork payout test, the three separation tests,
+the refusal path, the testnet→mainnet sequence.
+
+---
+
+## Session log
+
+| Date | Session outcome |
+|---|---|
+| 16 Aug 2026 | Project renamed Ward → xCover. `docs/SPEC.md` drafted in full. |
+| 17 Aug 2026 | Spec reviewed; handoff and memory index created. §3.3 verification and §3.5 testnet probe run against live chains and recorded. Monorepo + Foundry scaffolded; `VerifyIntegration.s.sol` written and passing against mainnet. Git initialised, nothing committed. |
+
+Update this table at the end of every session (§1.3).

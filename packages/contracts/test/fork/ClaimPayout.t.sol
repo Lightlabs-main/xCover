@@ -173,6 +173,30 @@ contract ClaimPayoutForkTest is Test {
         );
     }
 
+    /// @notice Plant a deficit sized as a share of the **live** reserve, and return that share.
+    /// @dev The resolver judges a deficit as a proportion of the reserve, so a test that plants a
+    ///      fixed absolute figure is really testing whatever share that happened to be at the block
+    ///      it forked at. That is not hypothetical: 250,000 USDT — what this test planted before the
+    ///      payout became pro-rata — is 49.8 bp of the 50.2M supplied here, which sits under the
+    ///      50 bp floor by a whisker. The reserve grows with interest and with new depositors, so an
+    ///      absolute figure drifts across the floor over time and the test's outcome becomes a
+    ///      function of the fork block rather than of the contract.
+    function _plantDeficitBps(uint256 bps) internal returns (uint256 actualBps) {
+        uint256 supplied = aUsdt.totalSupply();
+        uint256 amount = (supplied * bps) / 10_000;
+
+        _plantDeficit(XLayerAddresses.USDT, amount);
+        assertEq(
+            aavePool.getReserveDeficit(XLayerAddresses.USDT),
+            amount,
+            "the live Pool does not report the deficit"
+        );
+
+        // Recomputed from the planted amount rather than assumed equal to `bps`, because the
+        // planting rounds. This is the share the resolver will actually see.
+        actualBps = (amount * 10_000) / supplied;
+    }
+
     // --- helpers --------------------------------------------------------------------------
 
     function _hashTerms(ClaimResolver.Terms memory t) internal view returns (bytes32) {
@@ -209,7 +233,10 @@ contract ClaimPayoutForkTest is Test {
     // --- the payout ------------------------------------------------------------------------
 
     /// @notice Deposit → cover → real deficit in the live Pool → claim → USDT in the wallet.
-    function test_FullPayoutPathAgainstLiveAave() public onlyForked {
+    /// @dev The payout is the depositor's pro-rata share of the hole, not the whole position: 5% of
+    ///      the reserve unbacked pays 5% of cover. Asserted against the share actually planted in
+    ///      live Aave rather than a hardcoded figure.
+    function test_ProRataPayoutPathAgainstLiveAave() public onlyForked {
         // 1. The depositor's position is really supplied to Aave.
         vm.prank(vault);
         venue.deposit(DEPOSIT);
@@ -246,12 +273,12 @@ contract ClaimPayoutForkTest is Test {
         vm.roll(block.number + WINDOW + 1);
 
         // 4. A deficit appears in the live Pool's own storage, read back through its own getter.
-        _plantDeficit(XLayerAddresses.USDT, 250_000e6);
-        assertEq(
-            aavePool.getReserveDeficit(XLayerAddresses.USDT),
-            250_000e6,
-            "the live Pool does not report the deficit"
-        );
+        //    Sized at 5% of the live reserve: comfortably above the 50 bp noise floor, and just as
+        //    comfortably short of a total loss, so the payout has to be a proportion of something.
+        uint256 deficitBps = _plantDeficitBps(500);
+        uint256 expectedPayout = (DEPOSIT * deficitBps) / 10_000;
+        assertGt(expectedPayout, 0, "the planted deficit implies no loss at all");
+        assertLt(expectedPayout, DEPOSIT, "a partial loss should not imply full cover");
 
         // 5. It has to persist across the window; observations are recorded as blocks pass.
         _observe(MIN_SAMPLES);
@@ -259,7 +286,7 @@ contract ClaimPayoutForkTest is Test {
         // 6. Evaluation, against the real Pool.
         ClaimResolver.Trigger trigger = _evaluate(id);
         assertEq(uint8(trigger), uint8(ClaimResolver.Trigger.ReserveDeficit));
-        assertEq(resolver.claimAmount(id), DEPOSIT);
+        assertEq(resolver.claimAmount(id), expectedPayout, "payout was not the pro-rata share");
         assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Claimable));
 
         // 7. Anyone may settle it, and the money goes to the holder.
@@ -267,17 +294,57 @@ contract ClaimPayoutForkTest is Test {
         vm.prank(stranger);
         uint256 paid = resolver.claim(id);
 
-        assertEq(paid, DEPOSIT);
-        assertEq(usdt.balanceOf(depositor) - before, DEPOSIT, "the holder was not paid real USDT");
+        assertEq(paid, expectedPayout);
+        assertEq(
+            usdt.balanceOf(depositor) - before, expectedPayout, "the holder was not paid real USDT"
+        );
         assertEq(usdt.balanceOf(stranger), 0, "the settler was paid instead of the holder");
         assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Paid));
 
-        // 8. The pool remains solvent after paying.
+        // 8. The pool remains solvent after paying, and the cover it did not pay is released
+        //    rather than retained: a partial claim closes the policy in full.
         assertGe(pool.capital(), pool.outstandingCover(), "insolvent after a real payout");
-        assertEq(pool.capital(), CAPITAL - DEPOSIT);
+        assertEq(pool.capital(), CAPITAL - expectedPayout);
         assertEq(pool.outstandingCover(), 0);
 
+        emit log_named_uint("deficit share of the live reserve (bp)", deficitBps);
         emit log_named_uint("paid to holder (USDT, 6dp)", paid);
+    }
+
+    /// @notice A deficit below the noise floor is not a claim, proven against live Aave.
+    /// @dev The unit suite proves this against a stub. This proves the same thing where it matters:
+    ///      reading the real Pool's real getter, at the real reserve size. Aave's ordinary resting
+    ///      state is a small nonzero deficit — 27 of 67 Ethereum reserves carried one at once — and
+    ///      paying full cover on that was the bug this floor exists to prevent.
+    function test_SubFloorDeficitDoesNotPayOnLiveAave() public onlyForked {
+        vm.prank(vault);
+        venue.deposit(DEPOSIT);
+
+        vm.prank(vault);
+        uint256 id = policy.mintPolicy(
+            depositor,
+            XLayerAddresses.USDT,
+            DEPOSIT,
+            uint64(block.number) + 100_000,
+            1e21,
+            keccak256("quote"),
+            termsHash
+        );
+        vm.roll(policy.activeFromBlock(id));
+
+        // One basis point under the floor. The deficit is real, the Pool reports it, and it is
+        // still not a covered loss.
+        uint256 deficitBps = _plantDeficitBps(DEFICIT_FLOOR_BPS - 1);
+        assertLt(deficitBps, DEFICIT_FLOOR_BPS, "planted deficit was not below the floor");
+        assertGt(aavePool.getReserveDeficit(XLayerAddresses.USDT), 0, "nothing was planted");
+
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+
+        assertEq(resolver.claimAmount(id), 0);
+        assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Active));
     }
 
     /// @notice The depositor's underlying position is untouched by the claim.
@@ -301,7 +368,9 @@ contract ClaimPayoutForkTest is Test {
         );
         vm.roll(policy.activeFromBlock(id));
 
-        _plantDeficit(XLayerAddresses.USDT, 250_000e6);
+        _plantDeficitBps(500);
+        uint256 deficitBefore = aavePool.getReserveDeficit(XLayerAddresses.USDT);
+
         _observe(MIN_SAMPLES);
         _evaluate(id);
         resolver.claim(id);
@@ -309,7 +378,7 @@ contract ClaimPayoutForkTest is Test {
         assertGe(venue.totalAssets(), positionBefore, "the claim disturbed the covered position");
         assertEq(
             aavePool.getReserveDeficit(XLayerAddresses.USDT),
-            250_000e6,
+            deficitBefore,
             "xCover altered Aave's deficit, which it must never do"
         );
     }
@@ -329,14 +398,16 @@ contract ClaimPayoutForkTest is Test {
         );
         vm.roll(policy.activeFromBlock(id));
 
-        _plantDeficit(XLayerAddresses.USDT, 250_000e6);
+        // Comfortably above the floor, so this test fails for the reason it names: the deficit does
+        // not persist, not because it was too small to count.
+        _plantDeficitBps(500);
         _observe(MIN_SAMPLES - 1);
 
         // The deficit clears for a single block inside the window.
         _plantDeficit(XLayerAddresses.USDT, 0);
         _observe(1);
 
-        _plantDeficit(XLayerAddresses.USDT, 250_000e6);
+        _plantDeficitBps(500);
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));

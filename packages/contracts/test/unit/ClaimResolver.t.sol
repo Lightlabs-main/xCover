@@ -105,11 +105,22 @@ contract ClaimResolverTest is Test {
     }
 
     function _mint() internal returns (uint256 id) {
+        return _mintWithCover(COVER);
+    }
+
+    function _mintWithCover(uint256 cover) internal returns (uint256 id) {
         vm.prank(vault);
         id = policy.mintPolicy(
-            holder, address(asset), COVER, uint64(block.number) + 10_000, 1e21, bytes32(0), termsHash
+            holder, address(asset), cover, uint64(block.number) + 10_000, 1e21, bytes32(0), termsHash
         );
         vm.roll(policy.activeFromBlock(id));
+    }
+
+    /// @dev Set the venue to a deficit of exactly `bps` of the reserve, so a test states the share
+    ///      the resolver actually judges rather than two absolute figures the reader must divide.
+    function _setDeficitBps(uint256 bps) internal {
+        uint256 supplied = 10_000_000e6;
+        venue.setReserve((supplied * bps) / 10_000, supplied);
     }
 
     /// @dev Record `n` observations, one per block, as a keeper would.
@@ -163,7 +174,9 @@ contract ClaimResolverTest is Test {
 
     // --- reserve deficit ------------------------------------------------------------------
 
-    function test_SustainedDeficitTriggersFullCover() public {
+    /// @dev A wholly unbacked reserve — the deficit equals everything supplied — is the only case
+    ///      that pays full cover, because it is the only case where the depositor lost everything.
+    function test_TotallyUnbackedReservePaysFullCover() public {
         uint256 id = _mint();
         venue.setReserve(1_000e6, 1_000e6);
         _observe(MIN_SAMPLES);
@@ -171,8 +184,151 @@ contract ClaimResolverTest is Test {
         ClaimResolver.Trigger t = _evaluate(id);
 
         assertEq(uint8(t), uint8(ClaimResolver.Trigger.ReserveDeficit));
-        assertEq(resolver.claimAmount(id), COVER, "deficit did not pay full cover");
+        assertEq(resolver.claimAmount(id), COVER, "a total loss did not pay full cover");
         assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Claimable));
+    }
+
+    /// @notice The measured resting state of Aave V3, which must not be a claim.
+    /// @dev Ethereum Aave V3, 17 August 2026: USDT carried a deficit of 0.830980 against
+    ///      2,971,945,009 supplied — 0.0000028 bp. 27 of 67 reserves were nonzero at that moment. The
+    ///      first version of this contract would have paid full cover on every active policy against
+    ///      an implied loss of one part in 3.6 billion, and it would have looked correct until it
+    ///      fired, because X Layer's reserves read zero today only because that market is young.
+    function test_AaveRestingDeficitIsNotAClaim() public {
+        uint256 id = _mint();
+        venue.setReserve(830_980, 2_971_945_009e6);
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+
+        assertEq(resolver.claimAmount(id), 0);
+        assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Active));
+    }
+
+    /// @dev The floor is a boundary, so both sides of it are asserted. One basis point below it is
+    ///      not a covered event; the floor itself is.
+    function test_DeficitJustBelowTheFloorIsNotACoveredEvent() public {
+        uint256 id = _mint();
+        _setDeficitBps(DEFICIT_FLOOR_BPS - 1);
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+    }
+
+    function test_DeficitAtTheFloorTriggersAndPaysThatShare() public {
+        uint256 id = _mint();
+        _setDeficitBps(DEFICIT_FLOOR_BPS);
+        _observe(MIN_SAMPLES);
+
+        ClaimResolver.Trigger t = _evaluate(id);
+
+        assertEq(uint8(t), uint8(ClaimResolver.Trigger.ReserveDeficit));
+        // 50 bp of 10,000 of cover.
+        assertEq(resolver.claimAmount(id), 50e6, "payout was not the deficit's share of cover");
+    }
+
+    /// @dev The point of the fix: a partial loss pays a partial claim. 5% of the reserve unbacked
+    ///      pays 5% of cover, not all of it.
+    function test_DeficitPaysProRataNotFullCover() public {
+        uint256 id = _mint();
+        _setDeficitBps(500);
+        _observe(MIN_SAMPLES);
+
+        _evaluate(id);
+
+        assertEq(resolver.claimAmount(id), 500e6, "a 5% loss did not pay 5% of cover");
+        assertLt(resolver.claimAmount(id), COVER, "a partial loss paid full cover");
+    }
+
+    /// @dev The trigger asserts the condition held *throughout* the window, so the payout is what
+    ///      was true at every sample. A one-block spike cannot inflate it.
+    function test_DeficitPayoutUsesTheSmallestShareInTheWindow() public {
+        uint256 id = _mint();
+
+        _setDeficitBps(1_000); // 10% at the worst
+        _observe(2);
+        _setDeficitBps(200); // partial recovery, still above the floor
+        _observe(MIN_SAMPLES);
+
+        _evaluate(id);
+
+        assertEq(resolver.claimAmount(id), 200e6, "payout did not use the smallest share witnessed");
+    }
+
+    /// @dev No reserve means there is nothing for a deficit to be a share of. The honest answer is
+    ///      no covered event, not a division by zero and not a full payout.
+    function test_DeficitAgainstAnEmptyReserveIsNotAClaim() public {
+        uint256 id = _mint();
+        venue.setReserve(1_000e6, 0);
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+    }
+
+    /// @dev A qualifying condition that rounds down to nothing is not a claim. Marking the policy
+    ///      Claimable would consume the position and pay the holder zero — strictly worse for them
+    ///      than leaving the cover in force.
+    function test_QualifyingDeficitThatRoundsToZeroIsNotAClaim() public {
+        // Cover so small that the floor's share of it is below one unit of the asset.
+        uint256 id = _mintWithCover(100);
+        _setDeficitBps(DEFICIT_FLOOR_BPS);
+        _observe(MIN_SAMPLES);
+
+        vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
+        _evaluate(id);
+
+        assertEq(uint8(policy.policies(id).state), uint8(ICoverPolicy.PolicyState.Active));
+    }
+
+    // --- which trigger settles ---------------------------------------------------------------
+
+    /// @dev Triggers settle on the largest implied loss, not a fixed order of severity. Under a
+    ///      fixed order a small qualifying deficit would mask a total redemption failure and settle
+    ///      it for a fraction — here, 1% of cover instead of all of it.
+    function test_RedemptionFailureBeatsASmallQualifyingDeficit() public {
+        uint256 id = _mint();
+
+        _setDeficitBps(100); // qualifies, but implies a 1% loss
+        uint256 drain = asset.balanceOf(aToken) - 1_000e6;
+        vm.prank(aToken);
+        asset.transfer(address(0xdead), drain);
+        _observe(MIN_SAMPLES);
+
+        ClaimResolver.Trigger t = _evaluate(id);
+
+        assertEq(uint8(t), uint8(ClaimResolver.Trigger.RedemptionFailure));
+        assertEq(resolver.claimAmount(id), COVER, "the larger loss did not settle");
+    }
+
+    /// @dev And the same comparison in the other direction: a large deficit outranks a shallow
+    ///      depeg, so severity order is genuinely computed rather than hardcoded.
+    function test_LargeDeficitBeatsAShallowDepeg() public {
+        uint256 id = _mint();
+
+        _setDeficitBps(5_000); // 50% of the reserve unbacked -> 5,000 of cover
+        venue.setPrice(96_000_000); // $0.96, below the bound -> 400 of cover
+        _observe(MIN_SAMPLES);
+
+        ClaimResolver.Trigger t = _evaluate(id);
+
+        assertEq(uint8(t), uint8(ClaimResolver.Trigger.ReserveDeficit));
+        assertEq(resolver.claimAmount(id), 5_000e6, "the larger loss did not settle");
+    }
+
+    function test_DeepDepegBeatsASmallQualifyingDeficit() public {
+        uint256 id = _mint();
+
+        _setDeficitBps(100); // 1% of cover
+        venue.setPrice(90_000_000); // $0.90 -> 10% of cover
+        _observe(MIN_SAMPLES);
+
+        ClaimResolver.Trigger t = _evaluate(id);
+
+        assertEq(uint8(t), uint8(ClaimResolver.Trigger.OracleFailure));
+        assertEq(resolver.claimAmount(id), 1_000e6, "the larger loss did not settle");
     }
 
     /// @dev The whole point of windowed sampling. One clean reading inside the window means the

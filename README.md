@@ -226,7 +226,7 @@ end against a real dependency on a real chain.
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
 | Deployment scripts | Written; shared wiring, mainnet gated on the testnet record existing |
-| **X Layer testnet (1952)** | **Deployed** — addresses and tx hashes in [`deployments/xlayer-testnet.json`](deployments/xlayer-testnet.json) |
+| **X Layer testnet (1952)** | Deployed, but **superseded** — the live contracts carry a deficit trigger since found defective and fixed; redeployment pending. See [`docs/deployments.md`](docs/deployments.md) |
 | X Layer mainnet (196) | Not deployed |
 
 Two things have run against real Aave on a mainnet fork. `AaveV3Venue` supplies real

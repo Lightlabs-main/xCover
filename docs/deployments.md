@@ -28,6 +28,17 @@ Record: [`deployments/xlayer-testnet.json`](../deployments/xlayer-testnet.json).
 
 Explorer links for each are in the JSON record.
 
+> **The contracts at these addresses are superseded and must not be used.** They
+> carry the original deficit trigger, which paid full cover on any nonzero
+> deficit — Aave's ordinary resting state (see the finding below). The fix
+> changed `Terms`, so `termsHash` changed, and these contracts cannot be
+> upgraded into it. **A redeployment is required and has not happened yet.** The
+> lifecycle results recorded here were produced by the superseded contracts; the
+> path they exercised is still the real path, but the deficit payout they show is
+> the old full-cover behaviour.
+
+
+
 **What backs it, stated plainly.** Full xCover contract set plus `TestnetVenue`, a
 self-deployed custody-only venue, **because Aave V3 is not deployed on X Layer
 testnet** — verified 17 August 2026, empty code at both `POOL` and
@@ -63,6 +74,40 @@ the resolver reads is Aave's, and nothing xCover deploys can write it. The admin
 there can pause new issuance and nothing else — it cannot deny a valid claim, block
 a withdrawal, or cause a claim, and the separation tests assert each of those.
 
+
+### The deficit trigger defect, and why it is recorded here
+
+Found 17 August 2026, after the deployment above, while checking whether a real
+Aave deficit could be caused by ordinary transactions. It can: a deficit is
+recorded whenever a liquidation leaves an account with zero collateral and
+non-zero debt, and it is cleared only by a permissioned Umbrella call with
+[no time constraint](https://aave.com/docs/aave-v3/umbrella), so once nonzero it
+stays nonzero.
+
+The original trigger treated *any* nonzero deficit as a total loss and paid full
+cover. Measured on Ethereum Aave V3 the same day:
+
+| Reserve | Deficit | As a share of the reserve |
+|---|---|---|
+| USDT | 0.830980 on 2,971,945,009 supplied | 0.0000028 bp |
+| DAI | 2,700 on 134,991,795 | 0.2 bp |
+| cbBTC | 1 satoshi | ~0 |
+| WETH | 52,964 on 2,177,894 | **243 bp** — a materially damaged reserve |
+
+**27 of 67 reserves carried a nonzero deficit at the same moment.** A 10,000
+policy would have paid in full against an implied depositor loss of one part in
+3.6 billion. No attacker was required; this is the resting state of a mature
+market. Every X Layer reserve reads zero today only because that market is young,
+which made this a latent failure that would have looked correct until it fired.
+
+The fix judges the deficit as a share of the reserve, the way the depeg is already
+judged as a shortfall against peg: below `deficitFloorBps` there is no covered
+event, and above it the payout is the depositor's pro-rata share of the hole. The
+50 bp floor comes from the table above — eight orders of magnitude above the dust,
+well below a real solvency event. Triggers also now settle on whichever held
+condition implies the largest loss, so a small qualifying deficit cannot mask a
+total redemption failure.
+
 ### Testnet parameters differ from mainnet, deliberately
 
 This is the one place the two networks diverge in behaviour rather than in
@@ -77,6 +122,7 @@ networks produce one block per second (measured over 500 blocks, 17 August 2026)
 | Daily cover cap | 1,000,000 | 100,000 | Launch capital is small by design. |
 | Depeg lower bound | $0.97 | $0.97 | Same on both. The live oracle read $0.99896524 under normal conditions — ~10 bp off peg — so the threshold clears observed noise by roughly 30x instead of firing on it. |
 | Liquidity floor | 10,000 bp | 10,000 bp | Redeemable liquidity below 1x cover written is a redemption failure. |
+| Deficit floor | 50 bp | 50 bp | Same on both, and evidence-based — see the finding above. Below 0.5% of the reserve unbacked there is no covered event. **Not present in the deployed contracts.** |
 
 `waitingPeriodBlocks`, `windowBlocks`, `minSamples` and `dailyCoverCap` are
 **provisional**: `bench/threshold-derivation.md` does not exist yet, so they are

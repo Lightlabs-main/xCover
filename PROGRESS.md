@@ -82,8 +82,12 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Open questions for the owner
 
-- Source of real capital for the mainnet pool and the live covered position
-  (§11 requires both to be real).
+- **Mainnet capital: resolved in principle — owner will fund.** Amounts do not
+  need to be large: cover written can never exceed capital supplied, so a small
+  book is the same product with a smaller book, not a degraded one. Working
+  minimum is ~100 USDT as pool capital, ~50 USDT as the covered deposit (same
+  wallet is fine), plus OKB for gas. Needed at deployment, not before. The README
+  must state the book size plainly rather than implying scale.
 - Testnet OKB for the deployer: the OKX faucet gives 0.01 OKB/day, which may
   need starting now to cover the full testnet deployment set.
 

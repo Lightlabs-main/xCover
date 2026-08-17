@@ -225,14 +225,23 @@ end against a real dependency on a real chain.
 | Pricing agent | Not written |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
-| Deployments | None |
+| Deployment scripts | Written; shared wiring, mainnet gated on the testnet record existing |
+| **X Layer testnet (1952)** | **Deployed** — addresses and tx hashes in [`deployments/xlayer-testnet.json`](deployments/xlayer-testnet.json) |
+| X Layer mainnet (196) | Not deployed |
 
 Two things have run against real Aave on a mainnet fork. `AaveV3Venue` supplies real
 USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30
 days at the forked block), and redeems in full. And `test/fork/ClaimPayout.t.sol`
 runs the whole path — deposit, cover, trigger, settlement — paying 50,000 USDT to the
 policy holder. See [The payout test](#the-payout-test) for exactly what is real in it
-and what is not. No contract has yet been deployed to a live network.
+and what is not.
+
+**The full contract set is deployed and running on X Layer testnet (chain 1952)**, where
+a covered deposit and a recorded refusal have both executed on chain. What testnet
+cannot show is the Aave integration, because Aave V3 is not deployed there — that is
+what the fork tests cover, and what the mainnet deployment will. Which venue backs
+which network, and how the two parameter sets differ, is set out in
+[`docs/deployments.md`](docs/deployments.md). Mainnet is not deployed yet.
 
 ## Verified integration facts
 

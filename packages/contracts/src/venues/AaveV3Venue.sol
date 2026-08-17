@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IYieldVenue} from "../interfaces/IYieldVenue.sol";
 import {IAaveV3Pool} from "../interfaces/IAaveV3Pool.sol";
+import {IAaveOracle} from "../interfaces/IAaveOracle.sol";
 
 /// @title AaveV3Venue
 /// @notice Supplies covered positions to the real Aave V3 Pool on X Layer mainnet.
@@ -42,10 +43,20 @@ contract AaveV3Venue is IYieldVenue, AccessControl {
     /// @notice The aToken received for supplying `asset`. Rebases as interest accrues.
     IERC20 public immutable aToken;
 
-    constructor(IERC20 asset_, IAaveV3Pool aavePool_, IERC20 aToken_, address admin) {
+    /// @notice Aave's own price oracle. Read-only from here.
+    IAaveOracle public immutable oracle;
+
+    constructor(
+        IERC20 asset_,
+        IAaveV3Pool aavePool_,
+        IERC20 aToken_,
+        IAaveOracle oracle_,
+        address admin
+    ) {
         asset = asset_;
         aavePool = aavePool_;
         aToken = aToken_;
+        oracle = oracle_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
@@ -97,6 +108,22 @@ contract AaveV3Venue is IYieldVenue, AccessControl {
         if (redeemed < assets) revert InsufficientVenueLiquidity(assets, redeemed);
 
         emit Redeemed(redeemed, to);
+    }
+
+    /// @inheritdoc IYieldVenue
+    /// @dev Three pass-through reads of live Aave state. Nothing is cached, nothing is supplied by
+    ///      the caller, and there is deliberately no counterpart anywhere in this contract that can
+    ///      write any of the three — see the no-deficit-surface note above.
+    function observeReserve(address reserve, address aToken_)
+        external
+        view
+        returns (uint256 deficit, uint256 price, uint256 redeemableLiquidity)
+    {
+        return (
+            aavePool.getReserveDeficit(reserve),
+            oracle.getAssetPrice(reserve),
+            IERC20(reserve).balanceOf(aToken_)
+        );
     }
 
     /// @notice The reserve deficit Aave records for the covered asset — the primary claim trigger.

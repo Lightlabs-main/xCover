@@ -42,6 +42,29 @@ interface IYieldVenue {
     /// @notice Assets currently held on behalf of the caller's deposits, including any accrued.
     function totalAssets() external view returns (uint256);
 
+    /// @notice The three readings `ClaimResolver` samples, taken live at the current block.
+    ///
+    /// @dev The claim triggers are defined against the venue the position actually sits in, so the
+    ///      venue is what reports them. Binding the resolver to `IAaveV3Pool` directly would make
+    ///      the trigger unreadable on a chain where Aave does not exist, which is the chain the
+    ///      testnet deployment runs on — the judge-triggerable claim in SPEC §3.5 depends on this
+    ///      being interface-bound.
+    ///
+    ///      **Every value is read here and now.** No implementation may accept a reading from its
+    ///      caller. A caller therefore chooses only *when* a true reading is taken, never what it
+    ///      says, which is the property the resolver's manipulation resistance rests on.
+    ///
+    /// @param reserve The covered asset.
+    /// @param aToken The interest-bearing claim on it, whose underlying balance is the redeemable
+    ///        liquidity. Ignored by venues that hold the underlying directly.
+    /// @return deficit Unbacked obligations the venue records against `reserve`.
+    /// @return price The venue's oracle price for `reserve`, 8 decimals, `1e8` at peg.
+    /// @return redeemableLiquidity Underlying actually available to redeem right now.
+    function observeReserve(address reserve, address aToken)
+        external
+        view
+        returns (uint256 deficit, uint256 price, uint256 redeemableLiquidity);
+
     /// @notice Supply `assets` to the venue, pulled from the caller.
     function deposit(uint256 assets) external returns (uint256 supplied);
 

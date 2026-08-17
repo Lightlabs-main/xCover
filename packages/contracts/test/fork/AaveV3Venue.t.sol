@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {AaveV3Venue} from "../../src/venues/AaveV3Venue.sol";
 import {IYieldVenue} from "../../src/interfaces/IYieldVenue.sol";
 import {IAaveV3Pool} from "../../src/interfaces/IAaveV3Pool.sol";
+import {IAaveOracle} from "../../src/interfaces/IAaveOracle.sol";
 import {XLayerAddresses} from "../../src/XLayerAddresses.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -22,6 +23,7 @@ contract AaveV3VenueForkTest is Test {
     IERC20 internal usdt = IERC20(XLayerAddresses.USDT);
     IERC20 internal aUsdt = IERC20(XLayerAddresses.USDT_A_TOKEN);
     IAaveV3Pool internal aavePool = IAaveV3Pool(XLayerAddresses.POOL);
+    IAaveOracle internal oracle = IAaveOracle(XLayerAddresses.USDT_ORACLE);
 
     address internal vault = makeAddr("vault");
     address internal user = makeAddr("user");
@@ -32,7 +34,7 @@ contract AaveV3VenueForkTest is Test {
         forked = _forkOrSkip();
         if (!forked) return;
 
-        venue = new AaveV3Venue(usdt, aavePool, aUsdt, address(this));
+        venue = new AaveV3Venue(usdt, aavePool, aUsdt, oracle, address(this));
         venue.grantRole(venue.VAULT_ROLE(), vault);
 
         deal(address(usdt), vault, 100_000e6);

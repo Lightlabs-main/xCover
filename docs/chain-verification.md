@@ -169,6 +169,18 @@ confirmed on chain.
 4. `AaveV3Venue` must expose no `induceDeficit`-style surface, and the config
    loader must throw when chain environment and venue implementation disagree
    (both are already in the §11 definition of done).
+5. **`ClaimResolver` must read its triggers through `IYieldVenue`, not through
+   `IAaveV3Pool` directly.** Discovered on 17 August 2026 while writing the
+   deployment scripts: the resolver as first built took the Aave Pool and oracle in
+   its constructor, so on testnet — where both addresses are `0x` — every call to
+   `recordObservation` would revert and no claim could ever fire. The eligibility
+   gate would still have been met and the lifecycle rehearsal would not. Resolved
+   by adding `observeReserve` to the interface; `AaveV3Venue` forwards it to the
+   live Pool and oracle, `TestnetVenue` answers from its own real state.
+
+Also measured the same day, because every window and waiting period is denominated
+in blocks and is meaningless without it: **both networks produce one block per
+second**, averaged over 500 blocks on each.
 
 ---
 
@@ -184,6 +196,7 @@ confirmed on chain.
 | Oracle live | Yes — $0.99896524 |
 | Aave on X Layer testnet | **No** — `TestnetVenue` required |
 | Testnet chain id | **1952**, not 195 |
+| Block time, both networks | 1.000 s over 500 blocks |
 
 No fallback trigger substitution is needed. Primary claim trigger proceeds as
 specified.

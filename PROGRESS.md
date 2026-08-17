@@ -31,16 +31,21 @@ carries only current state and what happens next.
 | Separation tests (§4.7) | **All five written and passing** — `test/separation/ModelMoneySeparation.t.sol` |
 | Fork payout test (§6.1) | **Passing.** `test/fork/ClaimPayout.t.sol` runs deposit → cover → trigger → settlement against the live Aave Pool, paying 50,000 USDT to the holder. The deficit is planted in the live Pool's storage (slot discovered at runtime, not hardcoded) because the real reserve is healthy; everything reacting to it is real Aave bytecode. Also asserts a transient deficit does not pay, and that the claim touches neither the position nor Aave's deficit. |
 | `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
+| Deployment scripts | **Written.** `Deploy.s.sol` holds the wiring both networks share; `DeployTestnet` / `DeployMainnet` supply only asset, venue and parameters. Mainnet refuses to run without the testnet record. A simulation deliberately does not write the deployment record — only a real broadcast does. |
+| **X Layer testnet (1952)** | **Deployed 17 Aug 2026, block 38522841.** All seven contracts, roles verified on chain, `deployments/xlayer-testnet.json` committed with tx hashes and explorer links. Cost 0.000196 OKB. |
+| X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |
 | Frontend | Not started |
 | X account | Not created |
 
-The day-one verification has been executed against live X Layer mainnet, and
-`AaveV3Venue` has now run against the real Aave V3 Pool on a mainnet fork. Every
-other product contract is still tested only against itself; per §1.3 none of them
-may be marked done until each has run against a real dependency. Nothing has been
-deployed to a live network.
+The day-one verification has been executed against live X Layer mainnet,
+`AaveV3Venue` has run against the real Aave V3 Pool on a mainnet fork, and **the
+full contract set is now deployed and running on X Layer testnet**, where the
+covered-deposit path and the refusal path have both executed on chain. What is
+still unproven end to end on a live network is the Aave integration itself, which
+exists only on mainnet and is covered by the fork tests until the mainnet
+deployment happens.
 
 ## Settled by chain verification
 
@@ -69,13 +74,14 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. Deployment scripts, then the testnet deployment (chain 1952). Testnet must
-   provably precede mainnet.
+1. ~~Deployment scripts, then the testnet deployment.~~ **Done** — see
+   `docs/deployments.md`. Mainnet still needs funding and the parameter review.
 2. The pricing agent: read, retrieve, assess, compute, gate — producing the
    signed decisions `PricingRegistry` already accepts.
-3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
-   hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
-   Testnet must provably precede mainnet; it is an eligibility gate.
+3. Review the provisional deployment parameters before mainnet. The waiting
+   period, sampling window, minimum samples and daily cap in `script/Deploy*.s.sol`
+   are reasoned defaults, not derived ones, and are flagged as such in the code and
+   in `docs/deployments.md`. Only `depegLowerBound` ($0.97) is grounded in evidence.
 4. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
    threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
 5. Create the X account and publish the first build post.

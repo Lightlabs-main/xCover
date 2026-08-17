@@ -118,4 +118,103 @@ contract TestnetVenueTest is Test {
         vm.prank(user);
         venue.withdraw(1_000e6, user);
     }
+
+    // --- the readings ClaimResolver samples ------------------------------------------------
+
+    /// @dev A quiet venue must read as quiet. If the resting state were anything other than
+    ///      "no deficit, at peg", every policy would sit one window away from a payout.
+    function test_ObserveReserveRestsAtNoDeficitAndPeg() public {
+        vm.prank(vault);
+        venue.deposit(50_000e6);
+
+        (uint256 deficit, uint256 price, uint256 liquidity) =
+            venue.observeReserve(address(asset), address(0));
+
+        assertEq(deficit, 0, "a venue that has lost nothing reports a deficit");
+        assertEq(price, 1e8, "resting price is not peg");
+        assertEq(liquidity, 50_000e6, "redeemable liquidity is not what is held");
+    }
+
+    function test_ObserveReserveRejectsAnUnknownReserve() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(TestnetVenue.UnknownReserve.selector, address(0xBEEF))
+        );
+        venue.observeReserve(address(0xBEEF), address(0));
+    }
+
+    // --- the judge trigger (SPEC 3.5) -----------------------------------------------------
+
+    /// @dev The deficit has to be real, not a counter. If `induceDeficit` only wrote a number,
+    ///      the payout a judge watches would be settling against an imaginary loss, and the
+    ///      testnet demo would be exactly the fabricated demo the rules forbid.
+    function test_InduceDeficitActuallyRemovesTheAssets() public {
+        vm.prank(vault);
+        venue.deposit(50_000e6);
+
+        venue.induceDeficit(address(asset), 20_000e6);
+
+        (uint256 deficit,, uint256 liquidity) = venue.observeReserve(address(asset), address(0));
+        assertEq(deficit, 20_000e6, "deficit not recorded");
+        assertEq(liquidity, 30_000e6, "assets did not actually leave the venue");
+        assertEq(asset.balanceOf(venue.DEFICIT_SINK()), 20_000e6, "assets were not written off");
+
+        // Obligations stand at the full amount. That gap is what a deficit *is*.
+        assertEq(venue.deposited(), 50_000e6, "a deficit quietly reduced what depositors are owed");
+    }
+
+    /// @dev The venue cannot invent a shortfall larger than the assets it holds; a deficit is a
+    ///      loss of real value, and there is only so much real value here to lose.
+    function test_InduceDeficitCannotExceedHoldings() public {
+        vm.prank(vault);
+        venue.deposit(1_000e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TestnetVenue.DeficitExceedsHoldings.selector, 1_001e6, 1_000e6
+            )
+        );
+        venue.induceDeficit(address(asset), 1_001e6);
+    }
+
+    /// @dev A real deficit must make redemption genuinely fail. If withdrawals still succeeded
+    ///      after the assets were gone, the deficit would not be modelling anything.
+    function test_RedemptionFailsOnceAssetsAreGone() public {
+        vm.prank(vault);
+        venue.deposit(50_000e6);
+        venue.induceDeficit(address(asset), 50_000e6);
+
+        vm.prank(vault);
+        vm.expectRevert(); // ERC20 insufficient balance: the assets are not there to return
+        venue.withdraw(50_000e6, user);
+    }
+
+    function test_ReportedPriceMovesForTheDepegTrigger() public {
+        venue.setReportedPrice(address(asset), 90_000_000);
+        (, uint256 price,) = venue.observeReserve(address(asset), address(0));
+        assertEq(price, 90_000_000);
+    }
+
+    /// @dev The trigger surface is permissioned even on testnet. Anyone able to induce a deficit
+    ///      could trigger every live policy at will, which would make the testnet lifecycle
+    ///      evidence worthless rather than merely unrealistic.
+    function test_OnlyDemoRoleCanMoveTheTriggers() public {
+        vm.prank(vault);
+        venue.deposit(1_000e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, venue.DEMO_ROLE()
+            )
+        );
+        vm.prank(user);
+        venue.induceDeficit(address(asset), 100e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, venue.DEMO_ROLE()
+            )
+        );
+        vm.prank(user);
+        venue.setReportedPrice(address(asset), 1);
+    }
 }

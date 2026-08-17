@@ -8,6 +8,7 @@ import {ClaimResolver} from "../../src/ClaimResolver.sol";
 import {AaveV3Venue} from "../../src/venues/AaveV3Venue.sol";
 import {ICoverPool} from "../../src/interfaces/ICoverPool.sol";
 import {ICoverPolicy} from "../../src/interfaces/ICoverPolicy.sol";
+import {IYieldVenue} from "../../src/interfaces/IYieldVenue.sol";
 import {IAaveV3Pool} from "../../src/interfaces/IAaveV3Pool.sol";
 import {IAaveOracle} from "../../src/interfaces/IAaveOracle.sol";
 import {XLayerAddresses} from "../../src/XLayerAddresses.sol";
@@ -73,14 +74,16 @@ contract ClaimPayoutForkTest is Test {
 
         pool = new CoverPool(usdt, address(this));
         policy = new CoverPolicy(ICoverPool(address(pool)), WAITING, 1_000_000e6, address(this));
+        // The venue is constructed first because the resolver reads its triggers through it. On
+        // this fork those reads land on the live Aave Pool and the live oracle, so nothing about
+        // the evidence this test produces is weakened by the indirection.
+        venue = new AaveV3Venue(usdt, aavePool, aUsdt, oracle, address(this));
         resolver = new ClaimResolver(
             ICoverPool(address(pool)),
             ICoverPolicy(address(policy)),
-            aavePool,
-            oracle,
+            IYieldVenue(address(venue)),
             address(this)
         );
-        venue = new AaveV3Venue(usdt, aavePool, aUsdt, address(this));
 
         pool.grantRole(pool.VAULT_ROLE(), address(policy));
         pool.grantRole(pool.CLAIM_ROLE(), address(resolver));

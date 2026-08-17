@@ -7,9 +7,8 @@ import {CoverPolicy} from "../../src/CoverPolicy.sol";
 import {ClaimResolver} from "../../src/ClaimResolver.sol";
 import {ICoverPool} from "../../src/interfaces/ICoverPool.sol";
 import {ICoverPolicy} from "../../src/interfaces/ICoverPolicy.sol";
-import {IAaveV3Pool} from "../../src/interfaces/IAaveV3Pool.sol";
-import {IAaveOracle} from "../../src/interfaces/IAaveOracle.sol";
-import {StubAavePool, StubAaveOracle} from "../utils/StubAave.sol";
+import {IYieldVenue} from "../../src/interfaces/IYieldVenue.sol";
+import {StubVenue} from "../utils/StubVenue.sol";
 import {TestUSDT} from "../utils/TestUSDT.sol";
 
 /// @notice Deterministic trigger evaluation, window sampling, and settlement.
@@ -20,8 +19,7 @@ contract ClaimResolverTest is Test {
     CoverPool internal pool;
     CoverPolicy internal policy;
     ClaimResolver internal resolver;
-    StubAavePool internal aave;
-    StubAaveOracle internal oracle;
+    StubVenue internal venue;
     TestUSDT internal asset;
 
     address internal aToken = makeAddr("aUSDT");
@@ -40,16 +38,14 @@ contract ClaimResolverTest is Test {
 
     function setUp() public {
         asset = new TestUSDT();
-        aave = new StubAavePool();
-        oracle = new StubAaveOracle();
+        venue = new StubVenue(asset);
 
         pool = new CoverPool(asset, address(this));
         policy = new CoverPolicy(ICoverPool(address(pool)), WAITING, 1_000_000e6, address(this));
         resolver = new ClaimResolver(
             ICoverPool(address(pool)),
             ICoverPolicy(address(policy)),
-            IAaveV3Pool(address(aave)),
-            IAaveOracle(address(oracle)),
+            IYieldVenue(address(venue)),
             address(this)
         );
 
@@ -76,7 +72,7 @@ contract ClaimResolverTest is Test {
         termsHash = _hash(terms);
 
         // Healthy starting conditions: no deficit, at peg, ample redeemable liquidity.
-        oracle.setPrice(address(asset), 99_896_524);
+        venue.setPrice(99_896_524);
         asset.mint(aToken, 5_000_000e6);
 
         vm.roll(1_000);
@@ -151,8 +147,8 @@ contract ClaimResolverTest is Test {
     /// @dev Observations are read from chain, never supplied by the caller, so a hostile recorder
     ///      can choose only *when* to record a true reading.
     function test_ObservationRecordsLiveStateNotCallerInput() public {
-        aave.setDeficit(address(asset), 500e6);
-        oracle.setPrice(address(asset), 42_000_000);
+        venue.setDeficit(500e6);
+        venue.setPrice(42_000_000);
 
         vm.prank(stranger);
         resolver.recordObservation(address(asset), aToken);
@@ -166,7 +162,7 @@ contract ClaimResolverTest is Test {
 
     function test_SustainedDeficitTriggersFullCover() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         ClaimResolver.Trigger t = _evaluate(id);
@@ -181,14 +177,14 @@ contract ClaimResolverTest is Test {
     function test_ASingleCleanSampleDefeatsTheTrigger() public {
         uint256 id = _mint();
 
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES - 1);
 
         // One block where the deficit is absent.
-        aave.setDeficit(address(asset), 0);
+        venue.setDeficit(0);
         _observe(1);
 
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
@@ -197,7 +193,7 @@ contract ClaimResolverTest is Test {
 
     function test_TooFewSamplesIsNotATrigger() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES - 1);
 
         vm.expectRevert(
@@ -212,7 +208,7 @@ contract ClaimResolverTest is Test {
     ///      ago cannot be replayed into a claim today.
     function test_ObservationsOutsideTheWindowAreIgnored() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         vm.roll(block.number + WINDOW + 1);
@@ -229,7 +225,7 @@ contract ClaimResolverTest is Test {
     ///      constantly, so the bound is set well outside it and this asserts the gap holds.
     function test_NormalOffPegDriftDoesNotTrigger() public {
         uint256 id = _mint();
-        oracle.setPrice(address(asset), 99_896_524); // the live mainnet reading
+        venue.setPrice(99_896_524); // the live mainnet reading
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.NoTriggerMet.selector, id));
@@ -238,7 +234,7 @@ contract ClaimResolverTest is Test {
 
     function test_SustainedDepegPaysTheShortfallNotFullCover() public {
         uint256 id = _mint();
-        oracle.setPrice(address(asset), 90_000_000); // $0.90
+        venue.setPrice(90_000_000); // $0.90
         _observe(MIN_SAMPLES);
 
         ClaimResolver.Trigger t = _evaluate(id);
@@ -253,9 +249,9 @@ contract ClaimResolverTest is Test {
     function test_DepegPayoutUsesTheWorstPriceInTheWindow() public {
         uint256 id = _mint();
 
-        oracle.setPrice(address(asset), 80_000_000); // $0.80 at the bottom
+        venue.setPrice(80_000_000); // $0.80 at the bottom
         _observe(2);
-        oracle.setPrice(address(asset), 95_000_000); // partial recovery, still below bound
+        venue.setPrice(95_000_000); // partial recovery, still below bound
         _observe(MIN_SAMPLES);
 
         _evaluate(id);
@@ -286,7 +282,7 @@ contract ClaimResolverTest is Test {
     ///      ones fixed at mint is rejected on the hash, not argued about.
     function test_RejectsTermsThatDoNotMatchThePolicy() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         ClaimResolver.Terms memory friendly = terms;
@@ -310,7 +306,7 @@ contract ClaimResolverTest is Test {
             holder, address(asset), COVER, uint64(block.number) + 10_000, 1e21, bytes32(0), termsHash
         );
 
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.CoverNotActive.selector, id));
@@ -321,7 +317,7 @@ contract ClaimResolverTest is Test {
         uint256 id = _mint();
         vm.roll(policy.policies(id).endBlock + 1);
 
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
 
         vm.expectRevert(abi.encodeWithSelector(ClaimResolver.CoverNotActive.selector, id));
@@ -332,7 +328,7 @@ contract ClaimResolverTest is Test {
 
     function test_ClaimPaysTheHolderAndClosesThePolicy() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
         _evaluate(id);
 
@@ -357,7 +353,7 @@ contract ClaimResolverTest is Test {
         vm.prank(holder);
         policy.transferFrom(holder, buyer, id);
 
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
         _evaluate(id);
         resolver.claim(id);
@@ -368,7 +364,7 @@ contract ClaimResolverTest is Test {
 
     function test_CannotClaimTwice() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
         _evaluate(id);
         resolver.claim(id);
@@ -409,7 +405,7 @@ contract ClaimResolverTest is Test {
     /// @dev And the reverse: once a trigger has held, no role can stop the settlement.
     function test_AdminCannotBlockATriggeredClaim() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
         _evaluate(id);
 
@@ -426,7 +422,7 @@ contract ClaimResolverTest is Test {
     /// @dev Pausing halts issuance. It must not reach a claim that has already triggered.
     function test_PausedIssuanceDoesNotBlockSettlement() public {
         uint256 id = _mint();
-        aave.setDeficit(address(asset), 1_000e6);
+        venue.setDeficit(1_000e6);
         _observe(MIN_SAMPLES);
         _evaluate(id);
 

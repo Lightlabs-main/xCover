@@ -6,8 +6,7 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ICoverPool} from "./interfaces/ICoverPool.sol";
 import {ICoverPolicy} from "./interfaces/ICoverPolicy.sol";
-import {IAaveV3Pool} from "./interfaces/IAaveV3Pool.sol";
-import {IAaveOracle} from "./interfaces/IAaveOracle.sol";
+import {IYieldVenue} from "./interfaces/IYieldVenue.sol";
 
 /// @title ClaimResolver
 /// @notice Deterministic evaluation of the covered events, and settlement of the claims they
@@ -65,15 +64,21 @@ contract ClaimResolver is AccessControl {
     /// @notice One reading of the chain, taken at the block it names.
     struct Observation {
         uint64 blockNumber;
-        uint256 deficit; // POOL.getReserveDeficit(reserve)
-        uint256 price; // ORACLE.getAssetPrice(reserve), 8 decimals
-        uint256 redeemableLiquidity; // underlying held by the aToken
+        uint256 deficit; // unbacked obligations the venue records against the reserve
+        uint256 price; // the venue's oracle price for the reserve, 8 decimals
+        uint256 redeemableLiquidity; // underlying actually available to redeem
     }
 
     ICoverPool public immutable pool;
     ICoverPolicy public immutable policy;
-    IAaveV3Pool public immutable aavePool;
-    IAaveOracle public immutable oracle;
+
+    /// @notice The venue the covered position sits in, and therefore the source of the readings.
+    /// @dev Bound to the interface rather than to `IAaveV3Pool` because the trigger has to be
+    ///      readable on both chains: Aave V3 is on X Layer mainnet and is not on X Layer testnet.
+    ///      `AaveV3Venue` forwards these reads to the live Aave Pool and oracle; `TestnetVenue`
+    ///      answers from its own real on-chain state. The resolver's logic is identical either way,
+    ///      which is what makes the testnet lifecycle evidence about the mainnet system.
+    IYieldVenue public immutable venue;
 
     /// @notice Observations per reserve, in block order.
     mapping(address => Observation[]) internal _observations;
@@ -108,17 +113,10 @@ contract ClaimResolver is AccessControl {
     /// @notice The terms describe a different reserve than the policy covers.
     error TermsReserveMismatch();
 
-    constructor(
-        ICoverPool pool_,
-        ICoverPolicy policy_,
-        IAaveV3Pool aavePool_,
-        IAaveOracle oracle_,
-        address admin
-    ) {
+    constructor(ICoverPool pool_, ICoverPolicy policy_, IYieldVenue venue_, address admin) {
         pool = pool_;
         policy = policy_;
-        aavePool = aavePool_;
-        oracle = oracle_;
+        venue = venue_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
@@ -126,19 +124,22 @@ contract ClaimResolver is AccessControl {
 
     /// @notice Record what the chain says right now about a reserve.
     /// @dev Permissionless by design — see the contract note. Every value is read here and now
-    ///      from Aave and its oracle; nothing is supplied by the caller, so a hostile caller can
-    ///      only choose *when* to record a true reading, never what it says.
+    ///      from the venue; nothing is supplied by the caller, so a hostile caller can only choose
+    ///      *when* to record a true reading, never what it says.
     function recordObservation(address reserve, address aToken) external returns (uint256 index) {
         Observation[] storage obs = _observations[reserve];
         if (obs.length > 0 && obs[obs.length - 1].blockNumber == uint64(block.number)) {
             revert ObservationAlreadyRecorded(uint64(block.number));
         }
 
+        (uint256 deficit, uint256 price, uint256 redeemableLiquidity) =
+            venue.observeReserve(reserve, aToken);
+
         Observation memory o = Observation({
             blockNumber: uint64(block.number),
-            deficit: aavePool.getReserveDeficit(reserve),
-            price: oracle.getAssetPrice(reserve),
-            redeemableLiquidity: IERC20(reserve).balanceOf(aToken)
+            deficit: deficit,
+            price: price,
+            redeemableLiquidity: redeemableLiquidity
         });
 
         obs.push(o);

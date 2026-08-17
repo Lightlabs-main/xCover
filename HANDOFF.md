@@ -208,7 +208,7 @@ packages/contracts/
   script/VerifyIntegration.s.sol passing against live mainnet
 ```
 
-**Not written yet:** deployment scripts, the pricing agent, the benchmark corpus,
+**Not written yet:** the pricing agent, the benchmark corpus,
 the frontend. No deployments. X account not created.
 
 ### How the contracts fit together
@@ -245,6 +245,13 @@ Role wiring at deployment (get this right or nothing works):
 `Terms` struct it hashes must be the same one `ClaimResolver.evaluate` is later
 given — the resolver rejects any mismatch on the hash.
 
+**All of this wiring is now executed by `script/Deploy.s.sol`**, which both
+networks share, so neither can be wired differently by accident. The table above
+is what it does; do not hand-wire a deployment. `DeployTestnet.s.sol` and
+`DeployMainnet.s.sol` supply only the asset, the venue, and the parameter set.
+`TestnetVenue` also grants `DEMO_ROLE` to the deployer, which is what lets a judge
+induce a deficit; there is no equivalent on mainnet.
+
 ### Design decisions already made, with reasons
 
 Do not silently reverse these; they were argued for and are load-bearing.
@@ -263,6 +270,18 @@ Do not silently reverse these; they were argued for and are load-bearing.
   is an upgradeable proxy; a standing unlimited allowance is avoidable risk.
 - **`CoverPool` contains no `approve` call at all**, which is how the reflexivity
   rule is enforced. There is a bytecode test asserting the selector is absent.
+- **`ClaimResolver` reads its triggers through `IYieldVenue`, not `IAaveV3Pool`.**
+  It was originally bound to Aave directly, which made every trigger unreadable on
+  testnet — where Aave does not exist — and therefore made the judge-triggerable
+  claim impossible. `observeReserve` returns the deficit, the price and the
+  redeemable liquidity as one reading, because the resolver samples them as one
+  block's worth of state; three separate calls would let a caller pair a deficit
+  from one block with a price from another and call it an observation.
+- **`TestnetVenue.induceDeficit` moves real tokens out of the venue** rather than
+  incrementing a counter, and deliberately does not reduce `deposited`. That gap
+  between what is owed and what is held is what a deficit *is*, and it is how Aave
+  models it too. A counter would mean the payout a judge watches settles against
+  an imaginary loss.
 - **Plain ERC-4626 `deposit`/`mint` revert.** They cannot carry a quote, so they
   cannot mint cover, and an uncovered deposit is the worst possible outcome.
 
@@ -335,7 +354,27 @@ is not evidence.
 - `test/fork/ClaimPayout.t.sol` passing against forked mainnet
 
 Still open from §11: config loader environment pairing (belongs with the agent),
-deployments, real capital, agent, benchmark, frontend, X account.
+mainnet deployment, real capital, agent, benchmark, frontend, X account.
+
+### Deployed, and the keys behind it
+
+**X Layer testnet (1952) is deployed** — addresses, tx hashes and explorer links in
+`deployments/xlayer-testnet.json`, explained in `docs/deployments.md`. Mainnet is
+not. `DeployMainnet.s.sol` refuses to run without the testnet record present, so
+the eligibility order cannot be skipped by accident.
+
+| Key | Address | Holds |
+|---|---|---|
+| Deployer / admin | `0xF3c2991BCa976c9ecC55c1C1eb8e2fD6E21baae8` | `ADMIN_ROLE` (pause issuance only), `DEMO_ROLE` on `TestnetVenue` |
+| Pricer | `0x45cF11D571684174922a41c965263A03A0De5cd8` | `PRICER_ROLE` — signs quotes and refusals, nothing else |
+
+Both private keys live in `.env` and nowhere else. The deployer key is funded on
+testnet only; its mainnet balance is zero and mainnet funding is still owed.
+
+**A note that cost time once:** `.env` must contain `NAME=value` lines. A private
+key pasted in bare, with no `DEPLOYER_PRIVATE_KEY=` in front of it, leaves
+`vm.envUint` unable to see it and every script failing on a missing env var rather
+than on anything to do with the key. Copy `.env.example` and fill it in.
 
 ---
 
@@ -346,10 +385,14 @@ deployments, real capital, agent, benchmark, frontend, X account.
   smaller book. Working minimum: ~100 USDT pool capital, ~50 USDT covered deposit
   (same wallet is fine), plus OKB for gas. Needed at deployment, not before. The
   README must state the book size plainly rather than implying scale.
-- Testnet OKB for the deployer. The OKX faucet gives 0.01 OKB/day, so start
-  collecting now if the full testnet deployment set needs more than a day's worth.
-- `ANTHROPIC_API_KEY` and a dedicated `PRICER_PRIVATE_KEY` for signing quotes.
-  That key must be able to produce prices and refusals only — never move money.
+- ~~Testnet OKB for the deployer.~~ **Done.** Funded 17 Aug 2026 with 0.2 OKB,
+  which turned out to be ~400x what was needed: the full testnet deployment cost
+  **0.000196 OKB** and the whole lifecycle run a fraction more. The faucet worry
+  was unfounded — one day's 0.01 OKB would have covered it comfortably.
+- ~~A dedicated `PRICER_PRIVATE_KEY`.~~ **Done.** Generated 17 Aug 2026, in `.env`
+  only, never committed. It signs quotes and refusals and holds no other role; the
+  deploy scripts refuse to run if it equals the deployer key.
+- `ANTHROPIC_API_KEY` for the pricing agent. Still needed.
 
 ---
 

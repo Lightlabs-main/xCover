@@ -312,20 +312,38 @@ ClaimResolver      reads Aave via IYieldVenue → interface-bound
 xCoverVault        supplies via IYieldVenue    → interface-bound
 ```
 
-Introduce `IYieldVenue` with two implementations:
+Introduce `IYieldVenue` with two implementations. **As built** (this replaces an
+earlier sketch in this section that named `supply`/`deficit`/`oracleHealth` as
+separate calls; the built interface is the binding one):
 
 ```solidity
 interface IYieldVenue {
-    function supply(uint256 amount) external;
-    function withdraw(uint256 amount) external;
-    function balanceOf(address account) external view returns (uint256);
-    function deficit() external view returns (uint256);
-    function redemptionRatioRay() external view returns (uint256);
-    function oracleHealth() external view returns (bool stale, uint256 deviationBps);
+    function asset() external view returns (IERC20);
+    function venueName() external view returns (string memory);
+    function hasYieldSource() external view returns (bool);
+    function totalAssets() external view returns (uint256);
+    function deposit(uint256 assets) external returns (uint256 supplied);
+    function withdraw(uint256 assets, address to) external returns (uint256 redeemed);
+
+    // The three readings ClaimResolver samples, taken live at the current block.
+    function observeReserve(address reserve, address aToken)
+        external view returns (uint256 deficit, uint256 price, uint256 redeemableLiquidity);
 }
 ```
 
+The three trigger readings are grouped into one `observeReserve` call rather than
+three separate ones because the resolver samples them together, as one block's
+worth of state. Splitting them would let a caller record a deficit from one block
+and a price from another and call the pair an observation.
+
 - `AaveV3Venue` — mainnet. Wraps the real addresses in §3.1.
+- `TestnetUSDT` — testnet only. The covered asset. `XLayerAddresses.USDT` is a
+  mainnet address with no counterpart on 1952, so without this the testnet
+  deployment could not accept a deposit at all. A real ERC-20 with real balances,
+  mirroring mainnet USDT's 6 decimals so that amounts, the oracle's 8-decimal peg
+  comparison, and the pricing terms are the same numbers on both networks. `mint`
+  is deliberately open: a judge needs tokens without asking anyone, and the token
+  is worthless by construction. Not deployed to mainnet.
 - `TestnetVenue` — testnet only. A minimal, **fully functional** lending venue
   xCover deploys itself: real supply, real withdraw, real interest accrual, real
   deficit accounting. It is not a mock of Aave's behaviour returning canned

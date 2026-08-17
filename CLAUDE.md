@@ -107,14 +107,41 @@ Full evidence in `docs/chain-verification.md`; addresses in
 ```
 docs/SPEC.md                      binding spec, §1-12
 docs/chain-verification.md        raw on-chain evidence with block numbers
+README.md                         public-facing; build status and limitations
 HANDOFF.md                        cold-start handoff, survives a new machine
 PROGRESS.md                       current state and next actions
 packages/contracts/               Foundry project, solc 0.8.28
+  src/CoverPool.sol               capital, solvency accounting, claims
+  src/CoverPolicy.sol             ERC-721 positions and lifecycle
+  src/xCoverVault.sol             deposit and cover in one transaction
+  src/ClaimResolver.sol           windowed trigger sampling and settlement
+  src/PricingRegistry.sol         signed quotes and recorded refusals
+  src/venues/                     AaveV3Venue (mainnet), TestnetVenue (testnet)
   src/XLayerAddresses.sol         verified addresses
+  test/invariant/                 two solvency suites — never cut these
+  test/separation/                §4.7 model-and-money separation
+  test/fork/                      against live X Layer mainnet
   script/VerifyIntegration.s.sol  asserts the integration still holds
 deployments/                      per-chain address records, committed evidence
 bench/                            benchmark corpus and threshold derivation
 ```
+
+## State, briefly
+
+All five §4 contracts are written; 109 tests pass; **nothing is deployed**. The
+fork payout test runs the full path against live Aave. Next up is deployment
+scripts and the testnet deployment (chain 1952), which must provably precede
+mainnet. `HANDOFF.md` §4 has the role-wiring table and the design decisions that
+are load-bearing; §5 lists traps already paid for once — read both before writing
+contract or test code.
+
+## Two testing rules learned here the hard way
+
+- **A green invariant run can prove nothing.** Check `invariant_CallSummary`
+  (`forge test --match-test invariant_CallSummary -vv`) to confirm the fuzzer did
+  real work before trusting a pass.
+- **Mutation-check anything asserting an absence.** Break it deliberately, watch
+  the test fail, restore. A test never seen failing is not evidence.
 
 ## Never cut
 

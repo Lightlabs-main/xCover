@@ -10,7 +10,7 @@ what you want built. Read `CLAUDE.md` first if you are a human picking this up
 cold; it is the short version of this document.
 
 Repo: `https://github.com/Lightlabs-main/xCover`
-Last updated: 17 August 2026
+Last updated: 17 August 2026 — all five §4 contracts written, 109 tests passing, nothing deployed
 
 ---
 
@@ -181,75 +181,171 @@ reserve keeps the correlation surface small enough to reason about honestly.
 
 ## 4. What exists right now
 
-Two commits on `main`:
-
-- `150a1b7` — spec, chain verification, Foundry workspace, `VerifyIntegration.s.sol`
-- `75fbc8c` — progress notes
+All five §4 contracts are written, with 109 tests passing. Nothing is deployed to
+any network yet.
 
 ```
+README.md                        public-facing; states build status and limitations
 CLAUDE.md                        auto-loaded entry point for a new session
 docs/SPEC.md                     complete, binding, §1-12
 docs/chain-verification.md       raw evidence, day-one verification
 PROGRESS.md                      current state, next actions, session log
 HANDOFF.md                       this file
-package.json                     pnpm workspace root
-pnpm-workspace.yaml
-.env.example                     RPC endpoints, key placeholders
-.gitignore
 packages/contracts/
-  foundry.toml                   solc 0.8.28, cancun, invariant profile
-  remappings.txt
-  package.json
-  foundry.lock                   pins forge-std revision
-  lib/forge-std                  submodule
+  src/CoverPool.sol              capital, solvency accounting, premium, claims
+  src/CoverPolicy.sol            ERC-721 positions, lifecycle, waiting period, daily cap
+  src/xCoverVault.sol            deposit -> venue -> quote -> policy, one transaction
+  src/ClaimResolver.sol          windowed trigger sampling and settlement
+  src/PricingRegistry.sol        EIP-712 signed quotes and recorded refusals
+  src/venues/AaveV3Venue.sol     real Aave V3 (mainnet)
+  src/venues/TestnetVenue.sol    custody only, no yield source (testnet)
+  src/interfaces/               ICoverPool, ICoverPolicy, IYieldVenue, IAaveV3Pool, IAaveOracle
   src/XLayerAddresses.sol        verified addresses + constants
+  test/unit/                     lifecycle, registry, venue, vault, resolver
+  test/invariant/                two solvency suites
+  test/separation/               §4.7 model-and-money separation
+  test/fork/                     against live X Layer mainnet
   script/VerifyIntegration.s.sol passing against live mainnet
 ```
 
-**Not written yet:** every product contract (`CoverPool`, `CoverPolicy`,
-`xCoverVault`, `ClaimResolver`, `PricingRegistry`), the pricing agent, the
-benchmark corpus, the frontend. No deployments. X account not created.
+**Not written yet:** deployment scripts, the pricing agent, the benchmark corpus,
+the frontend. No deployments. X account not created.
+
+### How the contracts fit together
+
+```
+user deposits -> xCoverVault
+                   |-- venue.deposit()          assets supplied to Aave (or custodied on testnet)
+                   |-- registry.consumeQuote()  reverts if declined / stale / mispriced
+                   |-- policy.mintPolicy()      -> pool.reserveCover()  reverts if unbacked
+                   \-- _mint(shares)
+
+keeper/anyone -> resolver.recordObservation()   one per block, reads Aave live
+anyone        -> resolver.evaluate(id, terms)   all samples in window must hold
+                   \-- policy.markClaimable()
+anyone        -> resolver.claim(id)
+                   |-- policy.markPaid()
+                   \-- pool.payClaim()          pays the current policy holder
+```
+
+Role wiring at deployment (get this right or nothing works):
+
+| Contract | Role | Holder |
+|---|---|---|
+| `CoverPool` | `VAULT_ROLE` | `CoverPolicy` |
+| `CoverPool` | `CLAIM_ROLE` | `ClaimResolver` |
+| `CoverPool` | `ADMIN_ROLE` | deployer/admin |
+| `CoverPolicy` | `VAULT_ROLE` | `xCoverVault` |
+| `CoverPolicy` | `CLAIM_ROLE` | `ClaimResolver` |
+| `PricingRegistry` | `PRICER_ROLE` | the agent's signing key |
+| `PricingRegistry` | `VAULT_ROLE` | `xCoverVault` |
+| venue | `VAULT_ROLE` | `xCoverVault` |
+
+`xCoverVault.setTermsHash()` must be called before the first deposit, and the
+`Terms` struct it hashes must be the same one `ClaimResolver.evaluate` is later
+given — the resolver rejects any mismatch on the hash.
+
+### Design decisions already made, with reasons
+
+Do not silently reverse these; they were argued for and are load-bearing.
+
+- **`_reserve` is the only function that can raise `outstandingCover`.** The
+  solvency check lives inside it, so no later code path can bypass it.
+- **`capital` is credited from the amount actually received**, not the amount
+  requested, so a fee-on-transfer asset or a stray donation cannot inflate
+  underwriting headroom.
+- **Recording observations and settling claims are both permissionless.** A
+  keeper who could withhold either could deny a valid claim without ever calling
+  a function named "deny".
+- **A depeg pays the shortfall against peg, not full cover.** The depositor still
+  holds an asset worth something.
+- **`AaveV3Venue` approves Aave for exactly one supply and zeroes it after.** Aave
+  is an upgradeable proxy; a standing unlimited allowance is avoidable risk.
+- **`CoverPool` contains no `approve` call at all**, which is how the reflexivity
+  rule is enforced. There is a bytecode test asserting the selector is absent.
+- **Plain ERC-4626 `deposit`/`mint` revert.** They cannot carry a quote, so they
+  cannot mint cover, and an uncovered deposit is the worst possible outcome.
 
 ---
 
-## 5. Next actions, in order
+## 5. Traps already hit, so nobody pays for them twice
 
-1. **Write the solvency invariant test before `CoverPool` exists.** The
-   invariant defines the contract, not the reverse. Total claimable liability
-   across active policies never exceeds pool capital, holding under fuzzed
-   arbitrary sequences of deposits, mints, premium accrual, claims and
-   withdrawals. This is the one test that must never be cut.
-2. `CoverPool` + `CoverPolicy` written against that invariant. Then `IYieldVenue`
-   + `TestnetVenue` — now known to be required.
-3. Deploy the full set to X Layer testnet (chain 1952). Record addresses, tx
-   hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
-   **Testnet must provably precede mainnet — this is an eligibility gate, not a
-   preference.**
-4. `xCoverVault` (ERC-4626) + `AaveV3Venue` against real Aave on a fork.
-   `ClaimResolver` with all three triggers and block sampling.
-5. Pricing agent: read, retrieve, assess, compute, gate. `PricingRegistry`,
-   decision canonicalisation, hashing, public replay endpoint.
-6. Benchmark corpus built and scored; calibration curve;
-   `bench/threshold-derivation.md`. **Long-lead item — it gates the refusal
-   threshold, which gates the agent.** Start it early.
-7. Fork payout test, frontend, real capital on mainnet, README, demo video,
-   submit.
+These cost real debugging time in this repository. They are not hypothetical.
 
-### Required separation tests (§4.7)
+**`vm.expectRevert` and `vm.prank` are consumed by the *next call*, including a
+call in an argument list.** All of these are broken:
 
-- `test_PricerCannotAlterClaimOutcome`
-- `test_AdminCannotDenyValidClaim`
-- `CoverPool` capital is never supplied to a covered reserve
+```solidity
+vm.prank(alice); pool.withdraw(pool.sharesOf(alice));   // sharesOf eats the prank
+vm.expectRevert(...); foo(this.helperThatCallsOut());   // helper eats the expectRevert
+```
+
+Hoist the inner read into a local first. This bit three separate times here.
+
+**An invariant suite can pass while proving nothing.** The first system invariant
+run reported green with `policies minted: 0` — the daily cap had been consumed
+once and never reset, so every later mint reverted and the invariants checked an
+empty book. Every invariant suite therefore has an `invariant_CallSummary` that
+logs how much real work the fuzzer did. Read it (`forge test --match-test
+invariant_CallSummary -vv`) before believing a green run.
+
+**Reverts roll back handler call counters**, so a counter reading zero means "never
+succeeded", not "never attempted". Early `return`s do *not* roll back, so put the
+counter increment after the early returns or it overstates activity.
+
+**Writing to a proxy's storage will brick it.** The first slot any call on the
+Aave Pool reads is the ERC-1967 implementation pointer. The fork test's slot
+search must skip it, and must probe with a low-level `staticcall` so a bad guess
+cannot abort the search before the original value is restored.
+
+**Mutation-check every test that asserts an absence.** Break the thing on purpose,
+confirm the test fails, restore. Done for both solvency invariants, the resolver's
+window sampling, and the bytecode scans. A test that has never been seen to fail
+is not evidence.
+
+---
+
+## 6. Next actions, in order
+
+1. **Deployment scripts, then deploy to X Layer testnet (chain 1952).** Wire the
+   roles per the table above, using `TestnetVenue`. Record addresses, tx hashes,
+   block numbers and timestamps in `deployments/xlayer-testnet.json`. **Testnet
+   must provably precede mainnet — an eligibility gate, not a preference.**
+   Needs testnet OKB: the OKX faucet gives 0.01 OKB/day, so start collecting
+   before it is needed.
+2. **The pricing agent.** `PricingRegistry` already accepts what it must produce:
+   an EIP-712 `Decision` signed by a `PRICER_ROLE` key. Note the key never needs
+   gas — decisions are signed off-chain and may be submitted by anyone. Serve the
+   canonical decision JSON at `GET /decision/:hash` (RFC 8785) so the on-chain
+   `decisionHash` is independently verifiable.
+3. **Benchmark corpus and `bench/threshold-derivation.md`.** Long-lead: it gates
+   the refusal threshold, which gates the agent. The oracle sits ~10 bp off peg
+   in normal conditions, which is the first input.
+4. **Frontend**, then mainnet deployment with real capital, README figures, demo
+   video, submission.
+
+### Definition-of-done items already satisfied
+
+- Solvency invariant across fuzzed call sequences — two suites, mutation-checked
+- `test_PricerCannotMovePoolFunds`, `test_PricerCannotAlterClaimOutcome`,
+  `test_AdminCannotDenyValidClaim` — all passing
+- `CoverPool` capital never supplied to a covered reserve — bytecode-asserted
 - Pause blocks issuance but never claims or withdrawals
-- `AaveV3Venue` exposes no `induceDeficit` surface
-- Config loader throws when chain environment and venue implementation disagree
+- `AaveV3Venue` exposes no deficit-writing surface
+- `test/fork/ClaimPayout.t.sol` passing against forked mainnet
+
+Still open from §11: config loader environment pairing (belongs with the agent),
+deployments, real capital, agent, benchmark, frontend, X account.
 
 ---
 
-## 6. Open questions for the owner
+## 7. Open questions for the owner
 
-- Source of real capital for the mainnet pool and the live covered position.
-  §11 requires both to be real.
+- **Mainnet capital: owner will fund; amounts can be small.** Cover written can
+  never exceed capital supplied, so a small book is the same product with a
+  smaller book. Working minimum: ~100 USDT pool capital, ~50 USDT covered deposit
+  (same wallet is fine), plus OKB for gas. Needed at deployment, not before. The
+  README must state the book size plainly rather than implying scale.
 - Testnet OKB for the deployer. The OKX faucet gives 0.01 OKB/day, so start
   collecting now if the full testnet deployment set needs more than a day's worth.
 - `ANTHROPIC_API_KEY` and a dedicated `PRICER_PRIVATE_KEY` for signing quotes.
@@ -257,7 +353,7 @@ benchmark corpus, the frontend. No deployments. X account not created.
 
 ---
 
-## 7. Schedule and what never gets cut
+## 8. Schedule and what never gets cut
 
 Submission target **20 August 2026**. Deadline is 21 August 23:59 UTC. Submit on
 the 20th, never on deadline day.
@@ -272,7 +368,7 @@ separation tests, the refusal path, the testnet→mainnet sequence.
 
 ---
 
-## 8. Honest limitations to state, not hide
+## 9. Honest limitations to state, not hide
 
 Carry these into the README rather than letting a reviewer find them:
 

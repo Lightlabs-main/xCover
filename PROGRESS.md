@@ -25,7 +25,8 @@ carries only current state and what happens next.
 | `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
 | Solvency invariant (§1.2.4) | **Written and passing** — `test/invariant/CoverPoolSolvency.t.sol`, three properties, 16,384 calls per run. Mutation-checked: removing the check in `_reserve` fails it. |
 | System invariant | **Written and passing** — `test/invariant/CoverSystemSolvency.t.sol` drives the pool through `CoverPolicy`, the real issuance path, and adds: a policy holds a reservation iff it is Active or Claimable. Mutation-checked. |
-| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 70 tests passing. |
+| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `ClaimResolver`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 91 tests passing. |
+| `ClaimResolver` | **Written and passing.** All three triggers with windowed sampling; permissionless observation and settlement; no admin override in either direction. Mutation-checked: making one sample sufficient fails the window test. |
 | Separation tests (§4.7) | **All five written and passing** — `test/separation/ModelMoneySeparation.t.sol` |
 | `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
 | Pricing agent | None written |
@@ -66,11 +67,14 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. `ClaimResolver` — deterministic evaluation of the three triggers with block
-   sampling, holding `CLAIM_ROLE` on both `CoverPool` and `CoverPolicy`.
-2. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
+1. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
    transaction, and reverting with a clear reason when the agent declined.
-3. `test/fork/ClaimPayout.t.sol` — the full payout path on a mainnet fork.
+2. `test/fork/ClaimPayout.t.sol` — the full payout path on a mainnet fork. Note
+   the trigger conditions cannot be induced against real Aave, so the fork test
+   proves the read and payout path; trigger behaviour is proven in unit tests
+   against controllable state. State this split plainly rather than implying the
+   fork test induces a real deficit.
+3. Deployment scripts and the testnet deployment.
 4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.

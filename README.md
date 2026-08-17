@@ -194,8 +194,8 @@ end against a real dependency on a real chain.
 | Separation tests (§4.7) | All five written and passing |
 | `IYieldVenue` / `TestnetVenue` | Written; unit tested |
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
+| `ClaimResolver` | Written; triggers, window sampling and settlement unit tested |
 | `xCoverVault` | Not written |
-| `ClaimResolver` | Not written |
 | Pricing agent | Not written |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
@@ -269,6 +269,7 @@ packages/contracts/               Foundry project, solc 0.8.28
   src/CoverPool.sol               capital and solvency accounting
   src/CoverPolicy.sol             ERC-721 policy positions and lifecycle
   src/PricingRegistry.sol         signed quotes and refusals
+  src/ClaimResolver.sol           deterministic triggers and settlement
   src/venues/AaveV3Venue.sol      supplies to real Aave V3 (mainnet)
   src/venues/TestnetVenue.sol     custody only, no yield source (testnet)
   src/XLayerAddresses.sol         verified addresses

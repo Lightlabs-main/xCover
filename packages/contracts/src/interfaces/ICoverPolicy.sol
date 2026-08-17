@@ -71,4 +71,11 @@ interface ICoverPolicy {
 
     /// @notice Block from which this policy's cover is live.
     function activeFromBlock(uint256 policyId) external view returns (uint64);
+
+    /// @notice Move an active policy to Claimable after a trigger has been established.
+    /// @dev Restricted to `CLAIM_ROLE`, held by ClaimResolver, which has no discretion.
+    function markClaimable(uint256 policyId) external;
+
+    /// @notice Record that a claimable policy has been settled.
+    function markPaid(uint256 policyId, uint256 amount) external;
 }

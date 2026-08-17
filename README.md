@@ -221,7 +221,7 @@ end against a real dependency on a real chain.
 | `IYieldVenue` / `TestnetVenue` | Written; unit tested |
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
 | `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave** |
-| `xCoverVault` | Not written |
+| `xCoverVault` | Written; covered deposit and every refusal path unit tested |
 | Pricing agent | Not written |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
@@ -284,6 +284,14 @@ Stated here rather than left for a reviewer to find.
 - **Covering one reserve on one protocol is a small correlation surface by
   design, not by accident.** The wrapped reserves carry an additional bridge
   failure mode and are deliberately out of scope.
+- **Exits are all-or-nothing.** A partial exit would leave a policy sized for a
+  position that no longer exists, and resizing means re-quoting at exit time —
+  exactly when someone who has seen bad news would want a new price. Closing a
+  position returns the whole position.
+- **One open covered position per address.** A second deposit must follow an exit.
+- **Premium is owed whether or not the venue produced yield to pay it.** On
+  mainnet it comes out of Aave interest. On testnet, where there is no yield
+  source, it comes out of principal.
 - **Full collateralization caps capacity.** Cover written can never exceed
   capital supplied. That is the trade being made: capacity for the guarantee that
   the pool cannot fail to pay.
@@ -298,6 +306,7 @@ packages/contracts/               Foundry project, solc 0.8.28
   src/CoverPolicy.sol             ERC-721 policy positions and lifecycle
   src/PricingRegistry.sol         signed quotes and refusals
   src/ClaimResolver.sol           deterministic triggers and settlement
+  src/xCoverVault.sol             deposit and cover in one transaction
   src/venues/AaveV3Venue.sol      supplies to real Aave V3 (mainnet)
   src/venues/TestnetVenue.sol     custody only, no yield source (testnet)
   src/XLayerAddresses.sol         verified addresses

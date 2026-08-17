@@ -25,7 +25,8 @@ carries only current state and what happens next.
 | `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
 | Solvency invariant (§1.2.4) | **Written and passing** — `test/invariant/CoverPoolSolvency.t.sol`, three properties, 16,384 calls per run. Mutation-checked: removing the check in `_reserve` fails it. |
 | System invariant | **Written and passing** — `test/invariant/CoverSystemSolvency.t.sol` drives the pool through `CoverPolicy`, the real issuance path, and adds: a policy holds a reservation iff it is Active or Claimable. Mutation-checked. |
-| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `ClaimResolver`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 94 tests passing. |
+| Contracts | All five: `CoverPool`, `CoverPolicy`, `xCoverVault`, `ClaimResolver`, `PricingRegistry`, plus `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 109 tests passing. |
+| `xCoverVault` | **Written and passing.** One transaction: supply → consume quote → mint policy → mint shares. Plain ERC-4626 `deposit`/`mint` revert by name rather than producing an uncovered position. Refusal, staleness, capacity and terms-mismatch each refuse the deposit with the user's assets untouched. |
 | `ClaimResolver` | **Written and passing.** All three triggers with windowed sampling; permissionless observation and settlement; no admin override in either direction. Mutation-checked: making one sample sufficient fails the window test. |
 | Separation tests (§4.7) | **All five written and passing** — `test/separation/ModelMoneySeparation.t.sol` |
 | Fork payout test (§6.1) | **Passing.** `test/fork/ClaimPayout.t.sol` runs deposit → cover → trigger → settlement against the live Aave Pool, paying 50,000 USDT to the holder. The deficit is planted in the live Pool's storage (slot discovered at runtime, not hardcoded) because the real reserve is healthy; everything reacting to it is real Aave bytecode. Also asserts a transient deficit does not pay, and that the claim touches neither the position nor Aave's deficit. |
@@ -68,9 +69,10 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
-   transaction, and reverting with a clear reason when the agent declined.
-2. Deployment scripts, then the testnet deployment.
+1. Deployment scripts, then the testnet deployment (chain 1952). Testnet must
+   provably precede mainnet.
+2. The pricing agent: read, retrieve, assess, compute, gate — producing the
+   signed decisions `PricingRegistry` already accepts.
 3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.

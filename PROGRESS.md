@@ -47,11 +47,16 @@ carries only current state and what happens next.
 
 The day-one verification has been executed against live X Layer mainnet,
 `AaveV3Venue` has run against the real Aave V3 Pool on a mainnet fork, and **the
-full contract set is now deployed and running on X Layer testnet**, where the
-covered-deposit path and the refusal path have both executed on chain. What is
-still unproven end to end on a live network is the Aave integration itself, which
-exists only on mainnet and is covered by the fork tests until the mainnet
-deployment happens.
+corrected contract set is deployed and running on X Layer testnet**, where the
+covered-deposit path, the refusal path and a settled claim have all executed on
+chain. What is still unproven end to end on a live network is the Aave
+integration itself, which exists only on mainnet and is covered by the fork tests
+until the mainnet deployment happens.
+
+**The contracts are effectively finished. What is missing is the agent.** There
+is no pricing agent in the repository at all, and it is the piece the submission
+is about — see `HANDOFF.md` §6.1 for the brief and the interface it must produce
+against.
 
 ## Settled by chain verification
 
@@ -84,17 +89,30 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
    re-run and verified on chain. Decide whether to lower testnet
    `liquidityFloorBps` so the deficit trigger is demonstrable there; it costs one
    more redeployment.
-2. The pricing agent: read, retrieve, assess, compute, gate — producing the
-   signed decisions `PricingRegistry` already accepts.
+2. **The pricing agent** — the largest missing piece and the one the submission is
+   about; nothing of it exists yet. Read, retrieve, assess, compute, gate,
+   producing the signed decisions `PricingRegistry` already accepts on chain. The
+   signing key needs no gas. `ANTHROPIC_API_KEY` is still empty in `.env`.
+   `HANDOFF.md` §6.1 has the full brief.
 3. Review the provisional deployment parameters before mainnet. The waiting
    period, sampling window, minimum samples and daily cap in `script/Deploy*.s.sol`
    are reasoned defaults, not derived ones, and are flagged as such in the code and
-   in `docs/deployments.md`. Only `depegLowerBound` ($0.97) is grounded in evidence.
+   in `docs/deployments.md`. Only `depegLowerBound` ($0.97) and `deficitFloorBps` (50 bp) are grounded in evidence — both derived in `bench/threshold-derivation.md`.
 4. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
    threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
    `bench/threshold-derivation.md` now exists and holds the two derived
    thresholds; the corpus itself is still to be built.
-5. Create the X account and publish the first build post.
+5. Mainnet deployment (chain 196). Blocked on funding — deployer balance there is
+   zero. Re-run `VerifyIntegration.s.sol` immediately before deploying.
+6. Frontend, README figures, demo video.
+7. Create the X account and publish the first build post.
+
+**A decision is waiting on the owner:** whether to lower testnet
+`liquidityFloorBps` to ~5,000 bp so the deficit trigger is reachable there. As
+deployed, any write-off trips the redemption-failure floor first and outranks the
+deficit, so the testnet demo shows the redemption path rather than the pro-rata
+deficit path the redeployment existed to ship. Costs one redeployment and a new
+`termsHash`. Full reasoning in `HANDOFF.md` §6.2 and `docs/deployments.md`.
 
 ---
 

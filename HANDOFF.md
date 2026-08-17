@@ -357,24 +357,92 @@ is not evidence.
 
 ---
 
-## 6. Next actions, in order
+## 6. What is left, in order
 
-1. **Deployment scripts, then deploy to X Layer testnet (chain 1952).** Wire the
-   roles per the table above, using `TestnetVenue`. Record addresses, tx hashes,
-   block numbers and timestamps in `deployments/xlayer-testnet.json`. **Testnet
-   must provably precede mainnet — an eligibility gate, not a preference.**
-   Needs testnet OKB: the OKX faucet gives 0.01 OKB/day, so start collecting
-   before it is needed.
-2. **The pricing agent.** `PricingRegistry` already accepts what it must produce:
-   an EIP-712 `Decision` signed by a `PRICER_ROLE` key. Note the key never needs
-   gas — decisions are signed off-chain and may be submitted by anyone. Serve the
-   canonical decision JSON at `GET /decision/:hash` (RFC 8785) so the on-chain
-   `decisionHash` is independently verifiable.
-3. **Benchmark corpus and `bench/threshold-derivation.md`.** Long-lead: it gates
-   the refusal threshold, which gates the agent. The oracle sits ~10 bp off peg
-   in normal conditions, which is the first input.
-4. **Frontend**, then mainnet deployment with real capital, README figures, demo
-   video, submission.
+Three days to the 20 August submission target. Everything below is unstarted
+unless it says otherwise. Each item says what "done" means, so it can be picked
+up without reconstructing the reasoning first.
+
+### 6.1 Blocking the submission
+
+**1. The pricing agent.** The single largest missing piece, and the one the
+submission is actually about — the repository currently has no agent in it at
+all. `PricingRegistry` already accepts exactly what it must produce: an EIP-712
+`Decision` signed by a `PRICER_ROLE` key. The shape is fixed and deployed, so
+this is additive work against a stable interface, not a design negotiation.
+
+- Pipeline is read → retrieve → assess → compute → gate (SPEC §5).
+- The signing key **never needs gas**: decisions are signed off-chain and may be
+  submitted by anyone. Do not build a funded hot wallet for it.
+- Serve the canonical decision JSON at `GET /decision/:hash` (RFC 8785 canonical
+  form) so the on-chain `decisionHash` is independently checkable by a judge.
+- `DECLINE_TO_QUOTE` is a first-class output, not an error path. The registry
+  records refusals on the same footing as quotes and the testnet run has already
+  exercised that path on chain. **Never widen a quote to avoid refusing.**
+- `ANTHROPIC_API_KEY` is still empty in `.env`. Needed before this can run.
+- Done when: the agent produces a signed decision that `xCoverVault` consumes in
+  a real transaction on testnet, and a refusal that it correctly rejects.
+
+**2. Benchmark corpus and the rest of `bench/threshold-derivation.md`.**
+Long-lead, and it gates the agent's refusal threshold. The file now exists and
+covers the two derived thresholds (deficit floor, depeg bound); the corpus itself
+is not started. Contingency order says reduce its size if time is short — never
+drop it.
+
+**3. Mainnet deployment (chain 196).** `DeployMainnet.s.sol` refuses to run
+without the testnet record, so the eligibility order cannot be skipped by
+accident. Blocked on funding: the deployer's mainnet balance is zero. Working
+minimum is ~100 USDT pool capital, ~50 USDT covered deposit (same wallet is
+fine), plus OKB for gas. Re-run `VerifyIntegration.s.sol` immediately before
+deploying — an address book entry can go stale.
+
+**4. Review the provisional parameters before mainnet.** `waitingPeriodBlocks`,
+`windowBlocks`, `minSamples` and `dailyCoverCap` are reasoned defaults, flagged
+as such at their call sites and in `docs/deployments.md`. Only the deficit floor
+and the depeg bound are evidence-derived. Size the keeper cadence against the
+window, not against the RPC limit — see the trap in §5.
+
+**5. Frontend**, then README figures, demo video, X account and the first build
+post. The README must state the book size plainly rather than implying scale.
+
+### 6.2 Open decision, recorded rather than worked around
+
+**The deficit trigger is unreachable on the testnet deployment.** Verified on
+chain during the 17 August redeployment, and written up in full in
+`docs/deployments.md`.
+
+`TestnetVenue` custodies exactly one position, so its token balance equals the
+cover written against it. Writing off any amount therefore drops redeemable
+liquidity below the cover, which is the redemption-failure condition at
+`liquidityFloorBps: 10000`. Triggers settle on whichever held condition implies
+the largest loss, so the full-cover redemption failure outranks the deficit's
+pro-rata share for **any** write-off size.
+
+Not a contract defect, and it does not reach mainnet: there the aToken holds
+50.2M USDT against cover measured in tens of thousands, so that floor only trips
+in a genuine liquidity crisis. The pro-rata deficit behaviour is proven by twelve
+tests, two against the live Aave Pool on a mainnet fork.
+
+But it means **the testnet deployment demonstrates the redemption path, not the
+deficit path** — and the deficit path is what the redeployment existed to ship.
+If a judge is meant to watch it live, lower `liquidityFloorBps` on testnet only
+to around 5,000 bp. That costs one more redeployment and another `termsHash`
+(~0.0003 OKB, ~15 minutes). It is a policy-parameter change affecting payouts,
+so it is the owner's call and is deliberately left undecided here.
+
+### 6.3 Testing debt worth knowing about
+
+Two lessons from 17 August, both in §5 in full, both of which produced tests that
+passed while proving nothing:
+
+- A mutation check **expires** when the code around it changes. Re-run it when a
+  test's subject moves; do not trust a note saying it was checked once.
+- An invariant cannot see a bug that is not a violation of it. `payClaim`'s
+  payout cap had no test at all because it was assumed covered by the solvency
+  suites, which cannot express it — over-paying is theft, not insolvency.
+
+Every absence-asserting test in the repository was re-checked by mutation on
+17 August and all now hold. Anything added after that date has not been.
 
 ### Definition-of-done items already satisfied
 
@@ -385,15 +453,22 @@ is not evidence.
 - Pause blocks issuance but never claims or withdrawals
 - `AaveV3Venue` exposes no deficit-writing surface
 - `test/fork/ClaimPayout.t.sol` passing against forked mainnet
+- Reserve deficit judged as a share of the reserve, paid pro-rata above a 50 bp
+  floor — twelve tests, two against the live Aave Pool, all mutation-checked
+- `CoverPool`'s own guards asserted directly in `test/unit/CoverPool.t.sol`
+- Testnet deployed, wired and lifecycle-verified by reading the chain
 
 Still open from §11: config loader environment pairing (belongs with the agent),
 mainnet deployment, real capital, agent, benchmark, frontend, X account.
 
 ### Deployed, and the keys behind it
 
-**X Layer testnet (1952) is deployed** — addresses, tx hashes and explorer links in
-`deployments/xlayer-testnet.json`, explained in `docs/deployments.md`. Mainnet is
-not. `DeployMainnet.s.sol` refuses to run without the testnet record present, so
+**X Layer testnet (1952) is deployed** at block 38540175, carrying the corrected
+deficit trigger — addresses, tx hashes and explorer links in
+`deployments/xlayer-testnet.json`, explained in `docs/deployments.md`. The
+superseded first deployment is preserved at
+`deployments/xlayer-testnet.superseded-38522841.json`; do not use those addresses.
+Mainnet is not deployed. `DeployMainnet.s.sol` refuses to run without the testnet record present, so
 the eligibility order cannot be skipped by accident.
 
 | Key | Address | Holds |

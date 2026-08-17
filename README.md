@@ -19,8 +19,8 @@ Every depositor in an Aave reserve carries risk they did not choose and cannot
 price: contract failure, oracle failure, and liquidity conditions that prevent
 withdrawal. They are given a yield number. They are given no risk number.
 
-Cover exists — Nexus Mutual, InsurAce, others — and reaches a low single-digit
-percentage of DeFi TVL. Two structural reasons, both addressable:
+Cover for this risk already exists, and has not been widely adopted. Two
+structural reasons, both addressable:
 
 **Cover is sold separately from the deposit.** A second decision, a second
 transaction, a second fee, taken at the moment the user is least worried. Almost

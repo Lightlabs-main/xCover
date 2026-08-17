@@ -33,9 +33,11 @@ carries only current state and what happens next.
 | Frontend | Not started |
 | X account | Not created |
 
-The day-one verification has been executed against live X Layer mainnet. No
-product contract has run against a real dependency yet; per §1.3 nothing below
-the verification line may be marked done until it has.
+The day-one verification has been executed against live X Layer mainnet, and
+`AaveV3Venue` has now run against the real Aave V3 Pool on a mainnet fork. Every
+other product contract is still tested only against itself; per §1.3 none of them
+may be marked done until each has run against a real dependency. Nothing has been
+deployed to a live network.
 
 ## Settled by chain verification
 

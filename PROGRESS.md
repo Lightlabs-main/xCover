@@ -69,12 +69,12 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
    they can be written honestly; the pause test can be written now.
 3. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
    transaction.
-3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
+4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.
-4. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
+5. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
    threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
-5. Create the X account and publish the first build post.
+6. Create the X account and publish the first build post.
 
 ---
 

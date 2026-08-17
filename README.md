@@ -237,7 +237,11 @@ policy holder. See [The payout test](#the-payout-test) for exactly what is real 
 and what is not.
 
 **The full contract set is deployed and running on X Layer testnet (chain 1952)**, where
-a covered deposit and a recorded refusal have both executed on chain. What testnet
+the entire path has executed on chain: underwriting capital, a signed quote, a covered
+deposit minted in one transaction, a recorded refusal, a real deficit, windowed
+observations, a `ReserveDeficit` trigger, and **a 10,000 tUSDT claim paid to the policy
+holder**. The deficit was real — assets left the venue, which still owes them — so the
+payout settled against an actual shortfall rather than a flag. What testnet
 cannot show is the Aave integration, because Aave V3 is not deployed there — that is
 what the fork tests cover, and what the mainnet deployment will. Which venue backs
 which network, and how the two parameter sets differ, is set out in

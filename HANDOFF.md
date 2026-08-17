@@ -312,6 +312,16 @@ invariant_CallSummary -vv`) before believing a green run.
 succeeded", not "never attempted". Early `return`s do *not* roll back, so put the
 counter increment after the early returns or it overstates activity.
 
+**The keeper interval must divide the sampling window into comfortably more slices
+than `minSamples`.** Found during the live testnet payout: observations spaced ~28
+blocks apart put only about five inside a 120-block window, so the evaluation had to
+be preceded by fresh observations or it would have reverted `InsufficientSamples` on
+a completely valid claim. The failure mode is a valid claim that cannot be proven,
+which is worse than it sounds — it looks like the resolver rejecting the claim.
+Mainnet's 1,800-block window with `minSamples: 30` needs an observation at least
+every 60 blocks and should target noticeably more often. Size the keeper cadence
+against the window, not against the RPC limit.
+
 **Writing to a proxy's storage will brick it.** The first slot any call on the
 Aave Pool reads is the ERC-1967 implementation pointer. The fork test's slot
 search must skip it, and must probe with a low-level `staticcall` so a bad guess

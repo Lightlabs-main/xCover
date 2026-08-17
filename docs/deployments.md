@@ -92,9 +92,26 @@ because the waiting period and sampling window are real elapsed time.
 |---|---|---|
 | `open()` | 100,000 tUSDT underwriting capital, a signed quote, and `depositCovered` of 10,000 tUSDT | Policy **#1** minted, 10,000 cover reserved, cover active from block 38523377 |
 | `refuse()` | A signed `DECLINE_TO_QUOTE` recorded on the same path as a quote | `declinedCount` 1, `quotedCount` 1 |
-| `observe()` | `induceDeficit` writes off 10,000 tUSDT, then observations recorded across the window | see run log |
-| `trigger()` | `evaluate` against the terms hashed into the policy at mint | see run log |
-| `settle()` | `claim` pays the policy holder from `CoverPool` | see run log |
+| `observe()` | `induceDeficit` wrote off 10,000 tUSDT, then 9 observations recorded across the window | Venue deficit 10,000; venue holds **0** tUSDT while still owing 10,000 |
+| `trigger()` | `evaluate` against the terms hashed into the policy at mint | Trigger **1 = ReserveDeficit**, payout fixed at 10,000 |
+| `settle()` | `claim` paid the policy holder from `CoverPool` | **10,000 tUSDT paid.** Pool capital 100,000 → 90,000, outstanding cover → 0, policy #1 state `Paid` |
+
+Verified afterwards by reading the chain directly rather than trusting the script's
+own log: policy state `4` (Paid), `triggerOf(1)` = 1, `coverOf(1)` = 0,
+`capital()` = 90,000, venue balance 0 against 10,000 owed, registry showing one
+quote and one refusal, nine observations recorded.
+
+The whole thing — deployment, lifecycle, payout — cost **0.000252 OKB**.
+
+The window did bite, and it should be recorded rather than smoothed over: the first
+observations were spaced ~28 blocks apart, and a 120-block window holds only about
+five of those. The evaluation had to be preceded by fresh observations to keep at
+least `minSamples` inside the window. That is the sampling rule working as intended,
+not a defect, but it is a real constraint on keeper cadence: **the keeper interval
+must divide the window into comfortably more than `minSamples` slices**, or a
+perfectly valid claim reverts with `InsufficientSamples`. Mainnet's 1,800-block
+window with 30 samples needs an observation at least every 60 blocks, and should
+target rather more often than that.
 
 The quotes in this run were signed by hand with the pricer key, because the
 pricing agent does not exist yet. That is not a shortcut around the trust model:

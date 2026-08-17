@@ -33,6 +33,7 @@ carries only current state and what happens next.
 | `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
 | Deployment scripts | **Written.** `Deploy.s.sol` holds the wiring both networks share; `DeployTestnet` / `DeployMainnet` supply only asset, venue and parameters. Mainnet refuses to run without the testnet record. A simulation deliberately does not write the deployment record — only a real broadcast does. |
 | **X Layer testnet (1952)** | **Deployed 17 Aug 2026, block 38522841.** All seven contracts, roles verified on chain, `deployments/xlayer-testnet.json` committed with tx hashes and explorer links. Cost 0.000196 OKB. |
+| **Live testnet lifecycle** | **Full path ran on chain 17 Aug 2026:** capital → signed quote → covered deposit (policy #1) → recorded refusal → real deficit induced → 9 windowed observations → `ReserveDeficit` trigger → **10,000 tUSDT paid to the holder**. Verified by reading the chain, not the script log. |
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |

@@ -14,7 +14,7 @@ stale — fix it.
 | Area | State |
 |---|---|
 | `docs/SPEC.md` | Complete — §1–12, treated as binding |
-| Git repository | Initialised (`main`), **no commits yet** — awaiting lightlabs email |
+| Git repository | `Lightlabs-main/xCover`, `main` pushed. Commits authored `Lightlabs-main <lightlabs112@gmail.com>` |
 | Monorepo scaffold | pnpm workspace + Foundry project building |
 | Chain verification (§3.3) | **Done, all five calls, recorded in `docs/chain-verification.md`** |
 | Testnet probe (§3.5) | **Done — Aave absent from testnet, `TestnetVenue` required** |
@@ -56,26 +56,22 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. **Supply the lightlabs email**, then set `user.name` / `user.email` on the
-   repo and make the first commit. Nothing is committed yet. See §1.4 and the
-   commit-conventions memory — no AI attribution, no schedule words, ever.
-2. **Write the solvency invariant test before `CoverPool`.** The invariant
+1. **Write the solvency invariant test before `CoverPool`.** The invariant
    defines the contract, not the reverse (§12.3). This is the one test that must
    never be cut.
-3. `CoverPool` + `CoverPolicy` against that invariant, then `IYieldVenue` +
+2. `CoverPool` + `CoverPolicy` against that invariant, then `IYieldVenue` +
    `TestnetVenue` — now known to be required.
-4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
+3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.
-5. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
+4. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
    threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
-6. Create the X account and publish the first build post.
+5. Create the X account and publish the first build post.
 
 ---
 
 ## Open questions for the owner
 
-- Exact **lightlabs** git email — needed before the first commit.
 - Source of real capital for the mainnet pool and the live covered position
   (§11 requires both to be real).
 - Testnet OKB for the deployer: the OKX faucet gives 0.01 OKB/day, which may
@@ -85,9 +81,12 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Blocked
 
-- First commit, on the lightlabs email.
-- Nothing else. The §3.3 and §3.5 unknowns that gated the contract work are
-  resolved.
+Nothing. The §3.3 and §3.5 unknowns that gated the contract work are resolved,
+and the repository is live.
+
+Note for pushing from this codespace: the ambient `GITHUB_TOKEN` is refused for
+git pushes to xCover and takes precedence over the working credentials in
+`~/.config/gh/hosts.yml`. Prefix git and gh commands with `GITHUB_TOKEN=`.
 
 ---
 
@@ -105,6 +104,6 @@ the refusal path, the testnet→mainnet sequence.
 | Date | Session outcome |
 |---|---|
 | 16 Aug 2026 | Project renamed Ward → xCover. `docs/SPEC.md` drafted in full. |
-| 17 Aug 2026 | Spec reviewed; handoff and memory index created. §3.3 verification and §3.5 testnet probe run against live chains and recorded. Monorepo + Foundry scaffolded; `VerifyIntegration.s.sol` written and passing against mainnet. Git initialised, nothing committed. |
+| 17 Aug 2026 | Spec reviewed; handoff and memory index created. §3.3 verification and §3.5 testnet probe run against live chains and recorded. Monorepo + Foundry scaffolded; `VerifyIntegration.s.sol` written and passing against mainnet. First commit pushed to `Lightlabs-main/xCover`. |
 
 Update this table at the end of every session (§1.3).

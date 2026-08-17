@@ -190,8 +190,10 @@ end against a real dependency on a real chain.
 | `VerifyIntegration.s.sol` | Passing against live mainnet |
 | `CoverPool` | Written; solvency invariant passing and mutation-checked |
 | `CoverPolicy` | Written; full lifecycle under unit test |
-| `PricingRegistry` | Written; unit tested |
-| `IYieldVenue` / `TestnetVenue` / `AaveV3Venue` | Not written |
+| `PricingRegistry` | Written; quotes and refusals unit tested |
+| Separation tests (§4.7) | All five written and passing |
+| `IYieldVenue` / `TestnetVenue` | Written; unit tested |
+| `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
 | `xCoverVault` | Not written |
 | `ClaimResolver` | Not written |
 | Pricing agent | Not written |
@@ -199,7 +201,10 @@ end against a real dependency on a real chain.
 | Frontend | Not started |
 | Deployments | None |
 
-No product contract has run against a real chain yet.
+`AaveV3Venue` has run against the real Aave V3 Pool on a mainnet fork: it supplies real
+USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30
+days at the forked block), and redeems in full. No contract has yet been deployed to
+a live network.
 
 ## Verified integration facts
 
@@ -264,8 +269,12 @@ packages/contracts/               Foundry project, solc 0.8.28
   src/CoverPool.sol               capital and solvency accounting
   src/CoverPolicy.sol             ERC-721 policy positions and lifecycle
   src/PricingRegistry.sol         signed quotes and refusals
+  src/venues/AaveV3Venue.sol      supplies to real Aave V3 (mainnet)
+  src/venues/TestnetVenue.sol     custody only, no yield source (testnet)
   src/XLayerAddresses.sol         verified addresses
   test/invariant/                 solvency invariants
+  test/separation/                model-and-money separation tests
+  test/fork/                      tests against forked X Layer mainnet
   script/VerifyIntegration.s.sol  asserts the integration still holds
 deployments/                      per-chain address records
 bench/                            benchmark corpus and threshold derivation

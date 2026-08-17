@@ -25,7 +25,9 @@ carries only current state and what happens next.
 | `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
 | Solvency invariant (§1.2.4) | **Written and passing** — `test/invariant/CoverPoolSolvency.t.sol`, three properties, 16,384 calls per run. Mutation-checked: removing the check in `_reserve` fails it. |
 | System invariant | **Written and passing** — `test/invariant/CoverSystemSolvency.t.sol` drives the pool through `CoverPolicy`, the real issuance path, and adds: a policy holds a reservation iff it is Active or Claimable. Mutation-checked. |
-| Contracts | `XLayerAddresses.sol`, `ICoverPool`, `CoverPool`, `ICoverPolicy`, `CoverPolicy`. 30 tests passing. Not yet run against a real chain. |
+| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 70 tests passing. |
+| Separation tests (§4.7) | **All five written and passing** — `test/separation/ModelMoneySeparation.t.sol` |
+| `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |
 | Frontend | Not started |
@@ -62,13 +64,11 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. `IYieldVenue` + `TestnetVenue` — known to be required, since Aave is not on X
-   Layer testnet.
-2. The §4.7 separation tests. `test_PricerCannotMovePoolFunds` and
-   `test_PricerCannotAlterClaimOutcome` need `PricingRegistry` to exist before
-   they can be written honestly; the pause test can be written now.
-3. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
-   transaction.
+1. `ClaimResolver` — deterministic evaluation of the three triggers with block
+   sampling, holding `CLAIM_ROLE` on both `CoverPool` and `CoverPolicy`.
+2. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
+   transaction, and reverting with a clear reason when the agent declined.
+3. `test/fork/ClaimPayout.t.sol` — the full payout path on a mainnet fork.
 4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.
@@ -112,7 +112,7 @@ the refusal path, the testnet→mainnet sequence.
 | Date | Session outcome |
 |---|---|
 | 16 Aug 2026 | Project renamed Ward → xCover. `docs/SPEC.md` drafted in full. |
-| 17 Aug 2026 | Solvency invariant written before `CoverPool` and mutation-checked; `ICoverPool` + `CoverPool` implemented against it. `CoverPolicy` lifecycle built with 22 unit tests, and a second invariant added that drives the pool through the real issuance path. |
+| 17 Aug 2026 | Solvency invariant written before `CoverPool` and mutation-checked; `ICoverPool` + `CoverPool` implemented against it. `CoverPolicy` lifecycle built with 22 unit tests, and a second invariant added that drives the pool through the real issuance path. `PricingRegistry` added with signed quotes and recorded refusals; all five §4.7 separation tests written and passing. `IYieldVenue` with `TestnetVenue` and `AaveV3Venue`; the Aave venue passes against forked mainnet with real interest accrual. README written. |
 | 17 Aug 2026 | Spec reviewed; handoff and memory index created. §3.3 verification and §3.5 testnet probe run against live chains and recorded. Monorepo + Foundry scaffolded; `VerifyIntegration.s.sol` written and passing against mainnet. First commit pushed to `Lightlabs-main/xCover`. |
 
 Update this table at the end of every session (§1.3).

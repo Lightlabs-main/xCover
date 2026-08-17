@@ -131,6 +131,32 @@ Both suites have been mutation-checked — the enforcement deliberately removed,
 confirm the tests fail — because an invariant that has never been seen to fail is
 not evidence.
 
+### The payout test
+
+`test/fork/ClaimPayout.t.sol` is the primary artifact, and it is worth being precise
+about what it does and does not demonstrate.
+
+**Real:** the Aave Pool, the oracle, the USDT and aUSDT contracts, at the addresses
+verified in `docs/chain-verification.md`. The covered position is genuinely supplied
+to Aave. Observations are read out of Aave's own storage through its own getter. The
+trigger is evaluated by the deployed Aave bytecode, unmodified. The payout moves real
+USDT to the policy holder, and the pool is asserted solvent afterwards.
+
+**Synthetic, and stated rather than hidden:** X Layer's USDT reserve is healthy — no
+deficit, at peg, deeply liquid. A test cannot cause a real bad-debt event, and waiting
+for one is not a strategy. So the deficit value is written directly into the live
+Pool's storage on the fork. The number is planted; everything reading and reacting to
+it is real. **This test does not show that a deficit occurred on X Layer.**
+
+The storage slot is discovered at runtime — record which slots `getReserveDeficit`
+reads, write to each until Aave's own getter reports the value back — rather than
+hardcoded. A hardcoded slot would silently target the wrong field after any Aave
+upgrade. This fails loudly instead.
+
+Two further properties are asserted on the fork: a deficit that clears for even one
+block inside the window does not pay, and the claim leaves both the depositor's
+underlying position and Aave's own deficit untouched.
+
 ### The agent prices; it never moves money
 
 The model proposes a premium and a risk assessment. It never mints a policy,
@@ -194,17 +220,19 @@ end against a real dependency on a real chain.
 | Separation tests (§4.7) | All five written and passing |
 | `IYieldVenue` / `TestnetVenue` | Written; unit tested |
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
-| `ClaimResolver` | Written; triggers, window sampling and settlement unit tested |
+| `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave** |
 | `xCoverVault` | Not written |
 | Pricing agent | Not written |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
 | Deployments | None |
 
-`AaveV3Venue` has run against the real Aave V3 Pool on a mainnet fork: it supplies real
+Two things have run against real Aave on a mainnet fork. `AaveV3Venue` supplies real
 USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30
-days at the forked block), and redeems in full. No contract has yet been deployed to
-a live network.
+days at the forked block), and redeems in full. And `test/fork/ClaimPayout.t.sol`
+runs the whole path — deposit, cover, trigger, settlement — paying 50,000 USDT to the
+policy holder. See [The payout test](#the-payout-test) for exactly what is real in it
+and what is not. No contract has yet been deployed to a live network.
 
 ## Verified integration facts
 

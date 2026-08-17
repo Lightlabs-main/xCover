@@ -25,9 +25,10 @@ carries only current state and what happens next.
 | `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
 | Solvency invariant (§1.2.4) | **Written and passing** — `test/invariant/CoverPoolSolvency.t.sol`, three properties, 16,384 calls per run. Mutation-checked: removing the check in `_reserve` fails it. |
 | System invariant | **Written and passing** — `test/invariant/CoverSystemSolvency.t.sol` drives the pool through `CoverPolicy`, the real issuance path, and adds: a policy holds a reservation iff it is Active or Claimable. Mutation-checked. |
-| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `ClaimResolver`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 91 tests passing. |
+| Contracts | `CoverPool`, `CoverPolicy`, `PricingRegistry`, `ClaimResolver`, `IYieldVenue` + `TestnetVenue` + `AaveV3Venue`. 94 tests passing. |
 | `ClaimResolver` | **Written and passing.** All three triggers with windowed sampling; permissionless observation and settlement; no admin override in either direction. Mutation-checked: making one sample sufficient fails the window test. |
 | Separation tests (§4.7) | **All five written and passing** — `test/separation/ModelMoneySeparation.t.sol` |
+| Fork payout test (§6.1) | **Passing.** `test/fork/ClaimPayout.t.sol` runs deposit → cover → trigger → settlement against the live Aave Pool, paying 50,000 USDT to the holder. The deficit is planted in the live Pool's storage (slot discovered at runtime, not hardcoded) because the real reserve is healthy; everything reacting to it is real Aave bytecode. Also asserts a transient deficit does not pay, and that the claim touches neither the position nor Aave's deficit. |
 | `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |
@@ -69,18 +70,13 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 1. `xCoverVault` (ERC-4626) tying deposit → venue → quote → policy into one
    transaction, and reverting with a clear reason when the agent declined.
-2. `test/fork/ClaimPayout.t.sol` — the full payout path on a mainnet fork. Note
-   the trigger conditions cannot be induced against real Aave, so the fork test
-   proves the read and payout path; trigger behaviour is proven in unit tests
-   against controllable state. State this split plainly rather than implying the
-   fork test induces a real deficit.
-3. Deployment scripts and the testnet deployment.
-4. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
+2. Deployment scripts, then the testnet deployment.
+3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.
-5. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
+4. Start the benchmark corpus. Long-lead item: it gates the threshold, and the
    threshold gates the agent's `DECLINE_TO_QUOTE` behaviour.
-6. Create the X account and publish the first build post.
+5. Create the X account and publish the first build post.
 
 ---
 

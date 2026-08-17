@@ -33,11 +33,12 @@ carries only current state and what happens next.
 | Fork payout test (§6.1) | **Passing.** `test/fork/ClaimPayout.t.sol` runs deposit → cover → trigger → settlement against the live Aave Pool, paying 50,000 USDT to the holder. The deficit is planted in the live Pool's storage (slot discovered at runtime, not hardcoded) because the real reserve is healthy; everything reacting to it is real Aave bytecode. Also asserts a transient deficit does not pay, and that the claim touches neither the position nor Aave's deficit. |
 | `AaveV3Venue` against real Aave | **Passing on a forked X Layer mainnet.** Supplies real USDT, receives real aUSDT, accrues real interest (11.977953 USDT on 50,000 over 30 days), redeems in full. First product contract to run against a real dependency. |
 | Deployment scripts | **Written.** `Deploy.s.sol` holds the wiring both networks share; `DeployTestnet` / `DeployMainnet` supply only asset, venue and parameters. Mainnet refuses to run without the testnet record. A simulation deliberately does not write the deployment record — only a real broadcast does. |
-| **X Layer testnet (1952)** | **Deployed 17 Aug 2026, block 38522841 — now SUPERSEDED, redeployment required.** The deployed contracts carry the pre-fix deficit trigger; `termsHash` has since changed and cannot be upgraded into. |
-| ~~X Layer testnet, original~~ | Original record: All seven contracts, roles verified on chain, `deployments/xlayer-testnet.json` committed with tx hashes and explorer links. Cost 0.000196 OKB. |
-| **Live testnet lifecycle** | **Full path ran on chain 17 Aug 2026:** capital → signed quote → covered deposit (policy #1) → recorded refusal → real deficit induced → 9 windowed observations → `ReserveDeficit` trigger → **10,000 tUSDT paid to the holder**. Verified by reading the chain, not the script log. |
+| **X Layer testnet (1952)** | **Redeployed 17 Aug 2026, block 38540175, carrying the corrected deficit trigger.** All seven contracts, role wiring re-verified on chain including a negative control. Superseded record kept at `deployments/xlayer-testnet.superseded-38522841.json`. New pricer key `0x48E94cd8…`; the previous one did not survive to this machine. |
+| ~~X Layer testnet, original~~ | Superseded, block 38522841. Record preserved at `deployments/xlayer-testnet.superseded-38522841.json`. Cost 0.000196 OKB. |
+| **Live testnet lifecycle** | **Re-ran on the new deployment 17 Aug 2026:** capital → signed quote → covered deposit (policy #1) → recorded refusal → partial 2,500 tUSDT write-off → 5 windowed observations → trigger → **10,000 tUSDT paid**. Verified by reading the chain. **It settled as `RedemptionFailure`, not the deficit trigger** — see below. Cost 0.000249 OKB. |
+| Deficit trigger on testnet | **Unreachable, and recorded rather than worked around.** `TestnetVenue` holds exactly one position, so its balance equals the cover; any write-off drops liquidity below cover and the full-cover redemption failure outranks the deficit's pro-rata share. Not a contract defect and not a mainnet issue — there the aToken holds 50.2M against tens of thousands of cover. Fix if the demo needs the deficit path: lower `liquidityFloorBps` on testnet only to ~5,000 bp, which costs another redeployment and `termsHash`. |
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
-| Deficit trigger | **Fixed and tested; not yet redeployed.** Pays pro-rata above a 50 bp floor. Ten unit tests and two fork tests now cover the dust rejection, both sides of the floor, the pro-rata payout, the smallest-share-in-window rule, the empty reserve, the rounds-to-zero case, and all three trigger-precedence cases — all mutation-checked against the original bug. **The fork suite has been re-run against live X Layer mainnet and passes:** 499 bp of the live reserve pays 2,495 USDT on 50,000 of cover. |
+| Deficit trigger | **Fixed, tested and deployed.** Pays pro-rata above a 50 bp floor. Ten unit tests and two fork tests now cover the dust rejection, both sides of the floor, the pro-rata payout, the smallest-share-in-window rule, the empty reserve, the rounds-to-zero case, and all three trigger-precedence cases — all mutation-checked against the original bug. **The fork suite has been re-run against live X Layer mainnet and passes:** 499 bp of the live reserve pays 2,495 USDT on 50,000 of cover. |
 | Threshold derivation | **Started.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound with their measurements, and names the parameters that are still reasoned defaults. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |
@@ -79,13 +80,10 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. **Redeploy to X Layer testnet (1952).** The deployed set carries the pre-fix
-   deficit trigger and `termsHash` has changed, so it cannot be upgraded into.
-   The code side is now ready — tests and fork suite both green. **Blocked on
-   `.env`:** this machine has no `DEPLOYER_PRIVATE_KEY` or `PRICER_PRIVATE_KEY`,
-   which live only in `.env` on the machine that ran the first deployment. Copy
-   `.env.example` and fill both in, then rerun `DeployTestnet.s.sol` and the
-   lifecycle script, and replace `deployments/xlayer-testnet.json`.
+1. ~~Redeploy to X Layer testnet (1952).~~ **Done** — block 38540175, lifecycle
+   re-run and verified on chain. Decide whether to lower testnet
+   `liquidityFloorBps` so the deficit trigger is demonstrable there; it costs one
+   more redeployment.
 2. The pricing agent: read, retrieve, assess, compute, gate — producing the
    signed decisions `PricingRegistry` already accepts.
 3. Review the provisional deployment parameters before mainnet. The waiting
@@ -143,6 +141,7 @@ the refusal path, the testnet→mainnet sequence.
 
 | 17 Aug 2026 | Deployer key funded on testnet and a separate pricer key generated. Found and resolved a spec/code divergence: `ClaimResolver` was bound to `IAaveV3Pool`, which made every trigger unreadable on testnet — rebound to `IYieldVenue` via `observeReserve`. Added `TestnetUSDT` and `TestnetVenue.induceDeficit` so the testnet lifecycle is reachable at all. Wrote the deployment scripts, **deployed the full set to X Layer testnet (1952)**, and ran the whole path on chain including a 10,000 tUSDT claim paid to the holder. 116 tests passing. `docs/deployments.md` written. Total spend 0.000252 OKB. |
 
+| 17 Aug 2026 | Redeployed the full set to X Layer testnet at block 38540175 with the corrected deficit trigger, regenerated the pricer key, and re-ran the lifecycle on chain: policy #1, a recorded refusal, a partial 2,500 write-off, 5 observations, and 10,000 tUSDT paid. Found the deficit trigger is unreachable on testnet — the venue holds one position, so any write-off trips the redemption-failure floor first and outranks it. Recorded in `docs/deployments.md`. |
 | 17 Aug 2026 | Re-checked every absence-asserting test by mutation. The invariants and separation suite all hold. Found that `payClaim`'s payout cap had no test at all and that `CoverPool` had no unit file: the invariant handler bounded the payout to `reserved + 1`, so the fuzzer could overpay by one wei and deleting the cap left every invariant green. Over-paying is theft rather than insolvency, so no invariant can see it — `test/unit/CoverPool.t.sol` added to assert the pool's guards directly. |
 | 17 Aug 2026 | Found that both window-sampling tests had stopped proving the window rule: their zero-deficit dip block makes the pro-rata payout round to zero, so the zero-payout guard rejected the claim by itself and the sampling logic could be deleted with both still green. The unit test's original mutation check predated the pro-rata change and had silently expired. Dip is now sub-floor but non-zero on both the stub and live Aave. Trap recorded in `HANDOFF.md` §5. |
 | 17 Aug 2026 | Closed the deficit-trigger gap. Ten unit tests and two fork tests written for the pro-rata payout and the 50 bp floor, each mutation-checked against the original bug. Re-ran the fork suite, which had not run since the change: two tests failed because the fixed 250,000 USDT it plants is 49.8 bp of the live reserve and now sits under the floor, and the transient-deficit test was passing for that reason rather than the one it names. Fork tests now size the deficit as a share of the live reserve. 127 tests passing. `bench/threshold-derivation.md` written. |

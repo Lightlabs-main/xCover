@@ -10,7 +10,7 @@ what you want built. Read `CLAUDE.md` first if you are a human picking this up
 cold; it is the short version of this document.
 
 Repo: `https://github.com/Lightlabs-main/xCover`
-Last updated: 17 August 2026 — all five §4 contracts written, 109 tests passing, nothing deployed
+Last updated: 17 August 2026 — 136 tests passing; testnet redeployed at block 38540175 with the corrected deficit trigger; mainnet not deployed
 
 ---
 
@@ -181,8 +181,9 @@ reserve keeps the correlation surface small enough to reason about honestly.
 
 ## 4. What exists right now
 
-All five §4 contracts are written, with 109 tests passing. Nothing is deployed to
-any network yet.
+All five §4 contracts are written, with **136 tests passing** — 127 off-fork and 9
+against live X Layer mainnet. **X Layer testnet is deployed** (block 38540175);
+mainnet is not.
 
 ```
 README.md                        public-facing; states build status and limitations
@@ -398,7 +399,13 @@ the eligibility order cannot be skipped by accident.
 | Key | Address | Holds |
 |---|---|---|
 | Deployer / admin | `0xF3c2991BCa976c9ecC55c1C1eb8e2fD6E21baae8` | `ADMIN_ROLE` (pause issuance only), `DEMO_ROLE` on `TestnetVenue` |
-| Pricer | `0x45cF11D571684174922a41c965263A03A0De5cd8` | `PRICER_ROLE` — signs quotes and refusals, nothing else |
+| Pricer | `0x48E94cd8f946cb10b79Ad27cEE38037c9b3eE909` | `PRICER_ROLE` — signs quotes and refusals, nothing else |
+
+The pricer key was regenerated on 17 Aug 2026 during the testnet redeployment: the
+original (`0x45cF11D5…`) lived only in a `.env` that did not survive to the next
+machine. Nothing is lost by regenerating — the key signs quotes and holds no other
+role — but **`.env` is the only copy and it is gitignored.** If it is lost again,
+the pricer changes again and `PRICER_ROLE` must be regranted.
 
 Both private keys live in `.env` and nowhere else. The deployer key is funded on
 testnet only; its mainnet balance is zero and mainnet funding is still owed.

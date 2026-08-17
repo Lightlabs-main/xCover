@@ -13,31 +13,29 @@ than asserted here.
 
 ## X Layer testnet — chain 1952
 
-Deployed **17 August 2026**, block 38522841, timestamp 1786981678.
+Deployed **17 August 2026**, block 38540175, timestamp 1786999012.
 Record: [`deployments/xlayer-testnet.json`](../deployments/xlayer-testnet.json).
 
 | Contract | Address |
 |---|---|
-| `TestnetUSDT` (covered asset) | `0x5C63E71625C1ABC23A7f1A571e22fcdf1cc20345` |
-| `TestnetVenue` (venue) | `0x9D169a232A70A0375297FAe02A2e325Ab4370764` |
-| `CoverPool` | `0x8CaBB9bD14ad8E2b1d407Fa2f9Afe1a93922628E` |
-| `CoverPolicy` | `0xb6A57100AedB262cb5aCfD748c72052489B78Ea5` |
-| `PricingRegistry` | `0xecAC3585b8720E4Cb04CF54Af06022805a97f763` |
-| `ClaimResolver` | `0x65BbFb3fA98ca6256f55e79Fd043250Da3FdC7C8` |
-| `xCoverVault` | `0x530Cdd5aAd1BA7fE2A1eABcb4E813e587B1d0839` |
+| `TestnetUSDT` (covered asset) | `0x13Ab916B4a97E5F4c5F3C85296db1bfC1dd9C0c0` |
+| `TestnetVenue` (venue) | `0x1A211A4C13E57612925f2C54D565AA93986BE7f0` |
+| `CoverPool` | `0x7c0039a4a394D9d4DB81Db8c375e8fD42cDaF991` |
+| `CoverPolicy` | `0x659cBc26676C107EA1D8FC716B39b322c6e6776f` |
+| `PricingRegistry` | `0xbD3B482E7b28F376c594464e2E557415e8bA15c2` |
+| `ClaimResolver` | `0x2c92c3d3056f72Ec474395eC2212455EA44e4baa` |
+| `xCoverVault` | `0x3f8Bbf084C6ba4cEf33Fc6EEB7C24CCc0C0A40e0` |
+
+`termsHash` `0x1af6d4fda2f41d995d21e2908a550240d922668f845414619276bc4784bcc60e`.
 
 Explorer links for each are in the JSON record.
 
-> **The contracts at these addresses are superseded and must not be used.** They
-> carry the original deficit trigger, which paid full cover on any nonzero
-> deficit — Aave's ordinary resting state (see the finding below). The fix
-> changed `Terms`, so `termsHash` changed, and these contracts cannot be
-> upgraded into it. **A redeployment is required and has not happened yet.** The
-> lifecycle results recorded here were produced by the superseded contracts; the
-> path they exercised is still the real path, but the deficit payout they show is
-> the old full-cover behaviour.
-
-
+> **These are the redeployed contracts, carrying the corrected deficit trigger.**
+> The original set at block 38522841 is superseded and must not be used: it paid
+> full cover on any nonzero deficit — Aave's ordinary resting state (see the
+> finding below). The fix changed `Terms` and therefore `termsHash`, so those
+> contracts could not be upgraded into it. Their record is preserved at
+> [`deployments/xlayer-testnet.superseded-38522841.json`](../deployments/xlayer-testnet.superseded-38522841.json).
 
 **What backs it, stated plainly.** Full xCover contract set plus `TestnetVenue`, a
 self-deployed custody-only venue, **because Aave V3 is not deployed on X Layer
@@ -122,25 +120,69 @@ networks produce one block per second (measured over 500 blocks, 17 August 2026)
 | Daily cover cap | 1,000,000 | 100,000 | Launch capital is small by design. |
 | Depeg lower bound | $0.97 | $0.97 | Same on both. The live oracle read $0.99896524 under normal conditions — ~10 bp off peg — so the threshold clears observed noise by roughly 30x instead of firing on it. |
 | Liquidity floor | 10,000 bp | 10,000 bp | Redeemable liquidity below 1x cover written is a redemption failure. |
-| Deficit floor | 50 bp | 50 bp | Same on both, and evidence-based — see the finding above. Below 0.5% of the reserve unbacked there is no covered event. **Not present in the deployed contracts.** |
+| Deficit floor | 50 bp | 50 bp | Same on both, and evidence-based — see the finding above. Below 0.5% of the reserve unbacked there is no covered event. Present in the deployed contracts as of the 17 August redeployment. |
 
 `waitingPeriodBlocks`, `windowBlocks`, `minSamples` and `dailyCoverCap` are
-**provisional**: `bench/threshold-derivation.md` does not exist yet, so they are
-reasoned defaults documented at their call sites in `script/Deploy*.s.sol`, not
+**provisional**: `bench/threshold-derivation.md` now covers the deficit floor and the depeg
+bound, but not these, so they remain reasoned defaults documented at their call sites in `script/Deploy*.s.sol`, not
 derived ones. They must be revisited before the mainnet deployment.
+
+### Redeployment, 17 August 2026 — block 38540175
+
+The original deployment carried the pre-fix deficit trigger, and correcting it
+changed `Terms`, so `termsHash` moved from `0xace6897f…` to `0x1af6d4fd…`. A
+policy's terms are fixed at mint and verified on that hash, so the deployed set
+could not be upgraded into and was replaced. The superseded record is kept at
+`deployments/xlayer-testnet.superseded-38522841.json` rather than discarded.
+
+All seven contracts redeployed and the role wiring re-verified by reading the
+chain, including a negative control confirming the pricer holds no admin role on
+`CoverPool`. A fresh pricer key was generated for this deployment
+(`0x48E94cd8f946cb10b79Ad27cEE38037c9b3eE909`); the previous pricer's key did not
+survive to the machine that ran the redeployment.
 
 ### Live lifecycle run on testnet
 
 Driven by `script/LifecycleTestnet.s.sol` against the deployed contracts. Staged,
-because the waiting period and sampling window are real elapsed time.
+because the waiting period and sampling window are real elapsed time. Figures
+below are from the **redeployment** run.
 
 | Stage | What ran | Result |
 |---|---|---|
-| `open()` | 100,000 tUSDT underwriting capital, a signed quote, and `depositCovered` of 10,000 tUSDT | Policy **#1** minted, 10,000 cover reserved, cover active from block 38523377 |
+| `open()` | 100,000 tUSDT underwriting capital, a signed quote, and `depositCovered` of 10,000 tUSDT | Policy **#1** minted, 10,000 cover reserved, cover active from block 38540761 |
 | `refuse()` | A signed `DECLINE_TO_QUOTE` recorded on the same path as a quote | `declinedCount` 1, `quotedCount` 1 |
-| `observe()` | `induceDeficit` wrote off 10,000 tUSDT, then 9 observations recorded across the window | Venue deficit 10,000; venue holds **0** tUSDT while still owing 10,000 |
-| `trigger()` | `evaluate` against the terms hashed into the policy at mint | Trigger **1 = ReserveDeficit**, payout fixed at 10,000 |
-| `settle()` | `claim` paid the policy holder from `CoverPool` | **10,000 tUSDT paid.** Pool capital 100,000 → 90,000, outstanding cover → 0, policy #1 state `Paid` |
+| `observe()` | `induceDeficit` wrote off **2,500** tUSDT — a quarter of the position, not all of it — then 5 observations across the window | Deficit 2,500 of 10,000 supplied = **2,500 bp**; venue holds 7,500 against 10,000 owed |
+| `trigger()` | `evaluate` against the terms hashed into the policy at mint | Trigger **2 = RedemptionFailure**, payout 10,000 — *not* the deficit trigger; see below |
+| `settle()` | `claim` paid the policy holder from `CoverPool` | **10,000 tUSDT paid.** Pool capital 100,000 → 90,000, outstanding cover → 0, policy #1 `Paid` |
+
+Cost of the redeployment and the full lifecycle: **0.000249 OKB**.
+
+#### The deficit trigger is unreachable on this testnet deployment
+
+The partial write-off was meant to demonstrate the pro-rata payout: a 2,500 bp
+deficit on 10,000 of cover should pay 2,500. It settled as a redemption failure
+paying the full 10,000 instead, and the resolver was right to do so.
+
+`TestnetVenue` custodies exactly one position, so its token balance equals the
+cover written against it. Writing off any amount therefore drops redeemable
+liquidity below the cover, which is the redemption-failure condition at
+`liquidityFloorBps: 10000`. Because triggers settle on whichever held condition
+implies the largest loss, the full-cover redemption failure outranks the deficit's
+2,500 every time. **Any** deficit on this deployment produces that outcome, so the
+deficit trigger cannot be observed on testnet at all.
+
+This is an artefact of the venue holding a single position, not a contract defect,
+and it does not affect mainnet: there the aToken holds the whole reserve — 50.2M
+USDT against cover measured in tens of thousands — so redeemable liquidity sits
+far above any policy's cover and only a genuine liquidity crisis trips that floor.
+
+It does mean the testnet deployment demonstrates the redemption-failure path
+rather than the deficit path. The pro-rata deficit behaviour is proven by twelve
+tests, two of them against the live Aave Pool on a mainnet fork, where 499 bp of
+the real reserve pays 2,495 of 50,000 cover. Lowering `liquidityFloorBps` on
+testnet only — to around 5,000 bp — would let the deficit trigger surface there
+and is the obvious fix, at the cost of another redeployment and another
+`termsHash`. Recorded rather than quietly worked around.
 
 Verified afterwards by reading the chain directly rather than trusting the script's
 own log: policy state `4` (Paid), `triggerOf(1)` = 1, `coverOf(1)` = 0,

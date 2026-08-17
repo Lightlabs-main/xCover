@@ -167,18 +167,29 @@ contract LifecycleTestnet is Script {
     /// @dev Writes off real assets and records one observation. Call repeatedly, in separate blocks,
     ///      until `minSamples` observations sit inside the window. The deficit is induced once; the
     ///      subsequent calls only observe.
+    ///
+    ///      **The loss is deliberately partial.** Writing off the whole position produces a 100%
+    ///      deficit, which pays full cover — the one case that settles identically under the old
+    ///      rule and the new one, so a judge watching it would learn nothing about how a deficit is
+    ///      actually judged. A quarter of the position written off pays a quarter of the cover, and
+    ///      that is the behaviour worth demonstrating on chain: cover pays the loss suffered, not
+    ///      the position insured.
     function observe() external {
         Addrs memory a = _load();
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
         vm.startBroadcast(pk);
         if (a.venue.deficit() == 0) {
-            a.venue.induceDeficit(address(a.asset), DEPOSIT);
+            a.venue.induceDeficit(address(a.asset), DEPOSIT / 4);
         }
         a.resolver.recordObservation(address(a.asset), address(0));
         vm.stopBroadcast();
 
-        console2.log("venue deficit   ", a.venue.deficit());
+        (uint256 deficit,,, uint256 supplied) = a.venue.observeReserve(address(a.asset), address(0));
+
+        console2.log("venue deficit   ", deficit);
+        console2.log("of supplied     ", supplied);
+        console2.log("share (bp)      ", supplied == 0 ? 0 : (deficit * 10_000) / supplied);
         console2.log("observations    ", a.resolver.observationCount(address(a.asset)));
         console2.log("block           ", block.number);
     }

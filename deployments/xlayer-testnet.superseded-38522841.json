@@ -1,0 +1,34 @@
+{
+  "asset": "0x5C63E71625C1ABC23A7f1A571e22fcdf1cc20345",
+  "blockNumber": 38522841,
+  "chainId": 1952,
+  "claimResolver": "0x65BbFb3fA98ca6256f55e79Fd043250Da3FdC7C8",
+  "coverPolicy": "0xb6A57100AedB262cb5aCfD748c72052489B78Ea5",
+  "coverPool": "0x8CaBB9bD14ad8E2b1d407Fa2f9Afe1a93922628E",
+  "deployerAddress": "0xf3c2991bca976c9ecc55c1c1eb8e2fd6e21baae8",
+  "deploymentTxHashes": {
+    "asset": "0xfd42abfc8009afddc512c628d5a0b22bbb5b179444d5ced60e7b9e26f99a3c28",
+    "claimResolver": "0x6bd26797454a7c5d3c60f1fecb543943154c8a2e91f4d1a7c39fbe4ef36b43f6",
+    "coverPolicy": "0x85946d72edb58b9a8d4e90329964c910b7f4759850414a8d2097e0e34cbf5763",
+    "coverPool": "0xca7a349d5fdd1edcb64d54e6ed2b17f650978fd816296e2fdef91ea7538ff602",
+    "pricingRegistry": "0x947cf740fd54e3333ef9edf5a9e2f784855e618be1f4980df62b31b93552464c",
+    "venue": "0x35be3b398fbaf1c34f964f62cd95d0b85c3e993c241bae33b52c549c9421a3a9",
+    "xCoverVault": "0x0e1417edcd50af65ff448f0e3181c8b08eb2e4e9f66dfe077b4bd0eb6de71357"
+  },
+  "explorer": {
+    "asset": "https://www.oklink.com/x-layer-testnet/address/0x5C63E71625C1ABC23A7f1A571e22fcdf1cc20345",
+    "claimResolver": "https://www.oklink.com/x-layer-testnet/address/0x65BbFb3fA98ca6256f55e79Fd043250Da3FdC7C8",
+    "coverPolicy": "https://www.oklink.com/x-layer-testnet/address/0xb6A57100AedB262cb5aCfD748c72052489B78Ea5",
+    "coverPool": "https://www.oklink.com/x-layer-testnet/address/0x8CaBB9bD14ad8E2b1d407Fa2f9Afe1a93922628E",
+    "pricingRegistry": "https://www.oklink.com/x-layer-testnet/address/0xecAC3585b8720E4Cb04CF54Af06022805a97f763",
+    "venue": "https://www.oklink.com/x-layer-testnet/address/0x9D169a232A70A0375297FAe02A2e325Ab4370764",
+    "xCoverVault": "https://www.oklink.com/x-layer-testnet/address/0x530Cdd5aAd1BA7fE2A1eABcb4E813e587B1d0839"
+  },
+  "hasYieldSource": false,
+  "pricingRegistry": "0xecAC3585b8720E4Cb04CF54Af06022805a97f763",
+  "termsHash": "0xace6897fec17fb8490727c575fd83c1374e5f7a7aa9bf76af3a35f7e603b52e7",
+  "timestamp": 1786981678,
+  "venue": "0x9D169a232A70A0375297FAe02A2e325Ab4370764",
+  "venueName": "custody-only/xlayer-testnet",
+  "xCoverVault": "0x530Cdd5aAd1BA7fE2A1eABcb4E813e587B1d0839"
+}

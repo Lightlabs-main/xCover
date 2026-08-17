@@ -23,7 +23,8 @@ carries only current state and what happens next.
 | Chain verification (§3.3) | **Done, all five calls, recorded in `docs/chain-verification.md`** |
 | Testnet probe (§3.5) | **Done — Aave absent from testnet, `TestnetVenue` required** |
 | `VerifyIntegration.s.sol` (§3.6) | **Written and passing against live mainnet** |
-| Contracts | Only `XLayerAddresses.sol`; no product contracts written |
+| Solvency invariant (§1.2.4) | **Written and passing** — `test/invariant/CoverPoolSolvency.t.sol`, three properties, 16,384 calls per run. Mutation-checked: removing the check in `_reserve` fails it. |
+| Contracts | `XLayerAddresses.sol`, `ICoverPool`, `CoverPool`. Not yet run against a real chain. |
 | Pricing agent | None written |
 | Benchmark corpus | Not started |
 | Frontend | Not started |
@@ -60,11 +61,11 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. **Write the solvency invariant test before `CoverPool`.** The invariant
-   defines the contract, not the reverse (§12.3). This is the one test that must
-   never be cut.
-2. `CoverPool` + `CoverPolicy` against that invariant, then `IYieldVenue` +
-   `TestnetVenue` — now known to be required.
+1. `CoverPolicy` (ERC-721, the §4.2 lifecycle) wired to `CoverPool.reserveCover`
+   / `releaseCover`, then `IYieldVenue` + `TestnetVenue` — now known to be
+   required. Extend the invariant handler to drive the pool through
+   `CoverPolicy` rather than directly, so the invariant covers the real path.
+2. The §4.7 separation tests, which have no contract to run against yet.
 3. Deploy the full set to X Layer testnet (chain 1952) and record addresses, tx
    hashes, block numbers and timestamps in `deployments/xlayer-testnet.json`.
    Testnet must provably precede mainnet; it is an eligibility gate.
@@ -108,6 +109,7 @@ the refusal path, the testnet→mainnet sequence.
 | Date | Session outcome |
 |---|---|
 | 16 Aug 2026 | Project renamed Ward → xCover. `docs/SPEC.md` drafted in full. |
+| 17 Aug 2026 | Solvency invariant written before `CoverPool` and mutation-checked; `ICoverPool` + `CoverPool` implemented against it. |
 | 17 Aug 2026 | Spec reviewed; handoff and memory index created. §3.3 verification and §3.5 testnet probe run against live chains and recorded. Monorepo + Foundry scaffolded; `VerifyIntegration.s.sol` written and passing against mainnet. First commit pushed to `Lightlabs-main/xCover`. |
 
 Update this table at the end of every session (§1.3).

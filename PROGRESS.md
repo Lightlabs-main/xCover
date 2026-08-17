@@ -4,6 +4,10 @@
 session. If this file and the spec disagree, the spec wins and this file is
 stale — fix it.
 
+**Starting cold?** `CLAUDE.md` is the entry point and loads automatically in a
+Claude Code session; `HANDOFF.md` has the full cold-start detail. This file
+carries only current state and what happens next.
+
 **Submission:** X Layer AI Season. Target **20 August 2026**; deadline 21 August
 23:59 UTC. Today: 17 August 2026.
 

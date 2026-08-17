@@ -4,6 +4,11 @@ Everything needed to resume work on xCover from a cold start, on any machine,
 with no memory of previous sessions. Self-contained on purpose: paste this to a
 fresh agent, or point one at this file in the repo.
 
+**A Claude Code session loads `CLAUDE.md` automatically**, and that file points
+here — so on a new codespace you do not need to explain any of this. Just say
+what you want built. Read `CLAUDE.md` first if you are a human picking this up
+cold; it is the short version of this document.
+
 Repo: `https://github.com/Lightlabs-main/xCover`
 Last updated: 17 August 2026
 
@@ -182,6 +187,7 @@ Two commits on `main`:
 - `75fbc8c` — progress notes
 
 ```
+CLAUDE.md                        auto-loaded entry point for a new session
 docs/SPEC.md                     complete, binding, §1-12
 docs/chain-verification.md       raw evidence, day-one verification
 PROGRESS.md                      current state, next actions, session log

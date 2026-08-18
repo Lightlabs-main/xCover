@@ -87,3 +87,72 @@ published. That run is outstanding: it stopped on an Anthropic API credit limit.
 
 **No gate threshold is derived from this corpus yet, and none should be until
 the control has run.**
+
+---
+
+# Result: this corpus cannot support the §5.4 calibration
+
+**Do not run more scoring against this corpus expecting a usable threshold.** Three
+measurements, run 18 August 2026, establish that every route to high accuracy on it is
+an artifact of how it was built. The raw per-scenario output for all three is committed
+alongside this file.
+
+| Experiment | Scenario shows | Evidence retrieved | Accuracy | Data |
+|---|---|---|---|---|
+| 1 | protocol name + date | none | **17/20** | `data/control-sonnet5-low.jsonl` |
+| 2 | era + mechanism only | none | **12/20** | `data/control-anon.jsonl` |
+| 3 | era + mechanism only | 12 entries, whole protocol held out | **54/54** | `data/anon-evidence-60.jsonl` |
+
+Chance is 50%.
+
+**Experiment 1 — the model recognises the protocols.** With every piece of evidence
+removed it still scored 17/20, because it knows Balancer and Yearn were exploited. Naming
+the protocol hands over the answer.
+
+**Experiment 2 — removing the name closes that.** Anonymising the scenario to an era and a
+mechanism drops it to 12/20, which for n=20 is not distinguishable from guessing. Class
+separation collapsed with it: mean loss likelihood went from 7,760/4,115 bp to 5,800/4,475.
+
+**Experiment 3 — but then retrieval hands the answer over instead.** 54/54 looks like
+retrieval doing real work. It is not. **99.8% of the evidence actually retrieved carries
+the scenario's own label** (99.7% for loss rows, 100.0% for no-loss rows), and every row's
+`outcome` field states the answer in words:
+
+```
+loss     ->  "loss of 500,000,000,000 USD"
+no_loss  ->  "disclosed in a public audit competition; no depositor loss recorded"
+```
+
+The model reads twelve neighbours that all say the same thing and copies them. That is
+nearest-neighbour label propagation, not judgement.
+
+## Why this is structural, not a tuning problem
+
+The two halves of the corpus come from different source types — incident write-ups from
+`rekt.news`, audit findings from Code4rena — and they are written in different vocabulary.
+Lexical retrieval therefore returns a same-class neighbourhood essentially every time. No
+amount of holding out protocols, anonymising fields, or re-running fixes that, because the
+separability is in the source material.
+
+**What a usable corpus needs: negatives drawn from the same source type and written in the
+same words as the positives.** For example, protocols with a comparable profile over a
+comparable period that were not exploited, described in the same terms as the ones that
+were. Neither source used here can produce that, which is why this is a rebuild of the
+corpus's *sources*, not of its formatting.
+
+## Cost model, measured — do not project one run type from another
+
+This is the mistake that cost the most here. A no-evidence control run has prompts roughly
+6.5× smaller than a real run, so projecting a with-evidence cost from a control understates
+it by more than half.
+
+| Run type | Input/scenario | Output/scenario | Cost/scenario (Sonnet 5, `effort: low`) |
+|---|---|---|---|
+| With evidence (12 entries) | ~7,170 tok | ~1,549 tok | **$0.030** |
+| Control, no evidence | ~1,100 tok | ~1,050 tok | **$0.013** |
+
+A full 229-row scored run with evidence is therefore about **$6.80**, and a 20-scenario
+control about **$0.25**. `bench/score.mts` now prints actual spend after every run and
+refuses to project a full-run cost from a no-evidence run.
+
+Total spent establishing the above: **$9.00**.

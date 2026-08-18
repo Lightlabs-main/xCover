@@ -50,12 +50,19 @@ const STOP = new Set(["the","and","for","that","was","were","with","from","this"
 const terms = (text: string) =>
   new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 3 && !STOP.has(t)));
 
-/** Deterministic lexical retrieval over everything except the scenario under test. */
+/**
+ * Deterministic lexical retrieval over everything except the scenario's own protocol.
+ *
+ * Excluding just the row under test is not enough: 81 of the 229 rows have siblings from
+ * the same protocol, and 28 of them are Reserve, every one labelled no_loss. Retrieval
+ * would hand the model another row from the same protocol and it would read the answer off
+ * that sibling's outcome. The whole protocol is held out.
+ */
 function retrieve(scenario: Row, k = 12) {
   if (noEvidence) return [];
-  const want = terms(`${scenario.protocol} ${scenario.classification} ${scenario.title}`);
+  const want = terms(`${scenario.classification} ${scenario.title}`);
   return corpus
-    .filter((row) => row.id !== scenario.id)
+    .filter((row) => row.protocol !== scenario.protocol)
     .map((row) => {
       const have = terms(`${row.title} ${row.protocol} ${row.classification} ${row.text}`);
       let score = 0;
@@ -74,19 +81,26 @@ function retrieve(scenario: Row, k = 12) {
 /**
  * How a scenario is shown to the model.
  *
- * The two halves of the corpus arrive in different words, and those words give the answer
- * away: an incident write-up is titled "Balancer - REKT" and an audit finding is classified
- * "Audit finding (high severity)". A model reading either is not judging risk, it is reading
- * a label. Both are stripped here, and both halves are reduced to the same three fields.
- * This narrows the leak; it does not prove it closed, which is what the control run is for.
+ * The first version named the protocol, and the control proved what that bought: with every
+ * piece of evidence removed the model still scored 17 of 20 against a chance rate of 10. It
+ * recognises Balancer and Yearn as protocols that were exploited, so it was recalling an
+ * outcome, not judging a risk. The name is gone, and so is the exact date, which identifies
+ * an incident almost as precisely.
+ *
+ * Chain and target type are withheld for a different reason: the no-loss rows carry no chain
+ * and a constant target type, so either field would separate the two halves perfectly on its
+ * own — a leak of the corpus's construction rather than of anything about the risk.
+ *
+ * What remains is an era and a mechanism. The mechanism is still written in each half's own
+ * voice, and that residual difference is what the next control run measures.
  */
 function situation(scenario: Row) {
   const mechanism = scenario.label === "loss"
     ? (scenario.technique && scenario.technique !== "Unknown" ? scenario.technique : scenario.classification)
     : scenario.title;
+  const [year, month] = scenario.publishedAt.split("-");
   return {
-    protocol: scenario.protocol,
-    date: scenario.publishedAt,
+    era: `${year}-H${Number(month) <= 6 ? 1 : 2}`,
     mechanism: mechanism.replace(/\s*-\s*REKT\s*$/i, "").trim(),
   };
 }
@@ -94,7 +108,9 @@ function situation(scenario: Row) {
 function prompt(framing: string, scenario: Row, evidence: ReturnType<typeof retrieve>) {
   return [
     "You are the risk-assessment component of xCover's pricing agent, judging whether a described",
-    "protocol-risk situation resulted in depositor loss. You are not told the outcome.",
+    "protocol-risk situation resulted in depositor loss. You are not told the outcome, and the",
+    "protocol is deliberately unnamed: judge the mechanism against the retrieved evidence rather",
+    "than trying to identify which protocol this was.",
     "Return JSON only. Do not use markdown.",
     "You may only make claims supported by the supplied evidence; cite an evidence id on every hazard factor and conclusion.",
     `The only permitted evidence ids are: ${[...evidence.map((e) => e.id), LIVE_STATE_EVIDENCE_ID].join(", ")}.`,
@@ -195,8 +211,12 @@ let pending = corpus.filter((r) => !done.has(r.id));
 if (balanced) {
   // Sampling in file order takes the earliest rows, which are all incidents; a run that
   // never sees a negative cannot tell discrimination from a constant answer.
-  const loss = pending.filter((r) => r.label === "loss");
-  const noLoss = pending.filter((r) => r.label === "no_loss");
+  // Seeded shuffle: taking the head of each class samples the oldest incidents and only the
+  // first two audit contests, which is not representative of either half.
+  let seed = 20260818;
+  const shuffled = [...pending].sort(() => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) - 0.5);
+  const loss = shuffled.filter((r) => r.label === "loss");
+  const noLoss = shuffled.filter((r) => r.label === "no_loss");
   const half = Math.floor((limit || pending.length) / 2);
   pending = [...loss.slice(0, half), ...noLoss.slice(0, half)];
 }
@@ -233,6 +253,9 @@ if (rate && priced.length > 0) {
   const spent = (input / 1e6) * rate.input + (output / 1e6) * rate.output;
   console.error(
     `usage over ${priced.length} scenarios (${model}, effort=${effort}): ${input} in / ${output} out, ` +
-    `$${spent.toFixed(3)} spent, $${((spent / priced.length) * corpus.length).toFixed(2)} projected for all ${corpus.length}`,
+    `$${spent.toFixed(3)} spent` +
+    (noEvidence
+      ? " — no projection: these prompts carry no evidence and cost a fraction of a real run"
+      : `, $${((spent / priced.length) * corpus.length).toFixed(2)} projected for all ${corpus.length}`),
   );
 }

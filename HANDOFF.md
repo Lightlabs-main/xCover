@@ -322,6 +322,62 @@ Do not silently reverse these; they were argued for and are load-bearing.
 
 ---
 
+## 4a. Picking this up cold — the pricing agent, as of 18 August 2026
+
+Read this before touching `packages/agent` or `bench`. It is the state a previous
+session left, written so the next one does not repeat paid mistakes.
+
+### What is done and working
+
+- `packages/agent` implements the full §5.2 pipeline and has **11 unit tests passing**.
+  The assessment call runs on the official Anthropic SDK and has been proven end to end
+  against the live API.
+- `bench/data/corpus.jsonl` — **229 labelled scenarios, every citation fetched and
+  checked.** 148 incidents cited to `rekt.news`, 81 judged-valid Code4rena findings.
+  Build scripts in `bench/tools/` reproduce it. This artifact is sound.
+- `packages/agent/bench/score.mts` — the scoring harness. Leave-*protocol*-out retrieval,
+  anonymised scenarios, two framings, resumable, prints actual spend.
+
+### What is blocked, and why more spending will not unblock it
+
+The §5.4 calibration **cannot be produced from this corpus**, and this is proven, not
+suspected. The corpus's two halves come from different source types written in different
+vocabulary, so retrieval returns a same-class neighbourhood 99.8% of the time and the
+model reads the answer off its neighbours' `outcome` fields. Full evidence in
+`bench/README.md` § "Result: this corpus cannot support the §5.4 calibration".
+
+**Do not re-run the scoring hoping for a different number.** The fix is new negative
+scenarios drawn from the same source and vocabulary as the positives — protocols with a
+comparable profile that were not exploited, described in the same terms. That is a
+sourcing problem, not a code or budget problem.
+
+### If you continue, the cheap order
+
+1. **Free first.** Any new corpus design should be checked with the two free diagnostics
+   before a single paid call: what fraction of retrieved neighbours share the scenario's
+   label, and does any presented field separate the classes perfectly (chain and target
+   type both did, and had to be withheld).
+2. **$0.25 next.** Run the control — scenarios with retrieval disabled. If accuracy is
+   meaningfully above chance, stop; the framing still leaks.
+3. **$6.80 last.** Only then score the full corpus, and only against the model you intend
+   to deploy.
+
+### Budget reality
+
+$9.00 was spent reaching the conclusion above. Roughly $4 of that was avoidable: a full
+scored run was launched on a cost projected from a no-evidence control, which understated
+it by more than half. The measured per-scenario rates are in `bench/README.md` and the
+harness now prints real spend after every run.
+
+### The honest position for the README and the submission
+
+The agent is implemented, unit-tested, and proven to make real cited assessments against
+the live API. Its confidence signal was measured against a 229-scenario cited corpus and
+**failed calibration**, and the benchmark's own weaknesses were then measured and
+published rather than hidden. That is a stronger and more defensible claim than an
+unexamined accuracy figure would have been — but it does mean **no live quote has been
+issued**, and the README must say so plainly.
+
 ## 5. Traps already hit, so nobody pays for them twice
 
 These cost real debugging time in this repository. They are not hypothetical.
@@ -358,6 +414,21 @@ chain read, which had no id. The live model cited `live-chain-state` unprompted,
 the validator rejected the whole assessment, and the decision refused with
 `model_assessment_failed`. That id is now reserved and documented in the prompt;
 the corpus may not claim it.
+
+**A benchmark can score 100% and measure nothing.** Three separate times on this
+corpus, high accuracy turned out to be an artifact. Named protocols let the model
+recall the outcome (17/20 with no evidence at all). Anonymising fixed that (12/20,
+chance being 10/20) — and then retrieval leaked the label instead, because 99.8% of
+retrieved neighbours share the scenario's own label and every corpus row states its
+outcome in words. Before trusting any accuracy figure from a retrieval benchmark, run
+it with retrieval disabled, and check what fraction of the retrieved neighbourhood
+shares the answer. Both checks are cheap; the second is free.
+
+**Do not project one run's API cost from a different run's.** A no-evidence control has
+prompts about 6.5x smaller than a real scored run. Projecting the full run from the
+control understated it by more than half and overspent the budget by $4. Measured rates
+are in `bench/README.md`; `bench/score.mts` now prints actual spend and refuses to
+project across run types.
 
 **An invariant suite can pass while proving nothing.** The first system invariant
 run reported green with `policies minted: 0` — the daily cap had been consumed
@@ -448,13 +519,24 @@ It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
 serves canonical decision JSON at `GET /decision/:hash`, and treats
 `DECLINE_TO_QUOTE` as a first-class signed result. The signing key needs no gas.
 The API key and `ANTHROPIC_MODEL=claude-opus-5` are present in `.env`, and the
-assessment call has now been exercised end to end against the live API: it
-returns a parsed, bounded, cited assessment. The previously configured
+assessment call has been exercised end to end against the live API: it returns a
+parsed, bounded, cited assessment. The previously configured
 `claude-3-5-sonnet-20241022` did not exist for this key and returned HTTP 404,
 so every live decision would have refused with `model_assessment_failed` — a
 refusal caused by configuration rather than by insufficient evidence. Verify a
-model id against `GET /v1/models` before recording it as configured. The
-benchmark-derived thresholds are still unset, so no quote is claimed. The 50 bp deficit floor and
+model id against `GET /v1/models` before recording it as configured.
+
+**The confidence threshold is not derived and cannot be derived from the current
+corpus.** The benchmark exists (229 cited rows) and was scored in full, but every
+route to high accuracy on it proved to be an artifact — see
+`bench/threshold-derivation.md` and `bench/README.md`. `PRICING_CONFIDENCE_THRESHOLD_BPS`
+therefore has no measured value, and no quote is claimed. Disagreement and
+uncertainty bounds *were* measured and are usable if described honestly.
+
+Note a live discrepancy: `.env` names `claude-opus-5`, but the benchmark runs were
+made against `claude-sonnet-5` at `effort: low` for cost. A calibration measures one
+configuration, so **whichever model is deployed is the one that must be scored** — the
+existing scores do not calibrate an Opus 5 deployment. The 50 bp deficit floor and
 `97_000_000` depeg bound are spec-defined; the confidence, disagreement,
 uncertainty, oracle, capital-margin, premium-ceiling, and quote-TTL values are
 runtime/review parameters, not hidden spec defaults. The full provenance table

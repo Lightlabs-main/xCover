@@ -25,10 +25,10 @@ benchmark calibration.
 | `XCOVER_ENVIRONMENT` | Deployment selection | Must be `testnet` or `mainnet`; the loader checks the live venue |
 | `PRICING_ENGINE_VERSION` | Decision metadata | Set to `pricing-1.0.0/xlayer-usdt` in the example |
 | `QUOTE_TTL_BLOCKS` | Runtime policy | Exact value is not specified by §5; review before mainnet |
-| `bench/data/corpus.jsonl` | Required evidence artifact | Not created; 150–250 cited labelled scenarios are still needed |
-| Confidence threshold | Calibration output | Not derived |
-| Ensemble disagreement bound | Calibration/review output | Not derived |
-| Uncertainty-loading bound | Calibration/review output | Not derived |
+| `bench/data/corpus.jsonl` | Required evidence artifact | **Created — 229 cited labelled scenarios, every citation fetched and checked.** Sound as an artifact; unusable for calibration, for the structural reason in `bench/README.md`. |
+| Confidence threshold | Calibration output | **Not derived, and not derivable from the current corpus** — the signal failed calibration and the benchmark's accuracy proved to be an artifact. Any value set here is an operator choice and must be labelled as one. See `bench/threshold-derivation.md`. |
+| Ensemble disagreement bound | Calibration/review output | **Measured**: mean 993 bp, p90 2,000 bp, max 3,000 bp over 228 scenarios |
+| Uncertainty-loading bound | Calibration/review output | **Measured**: mean 4,532 bp, p90 6,000 bp, max 7,000 bp over 228 scenarios |
 | Capital-cost margin | Underwriting policy | Not specified; must be reviewed |
 | Oracle age/deviation bounds | Chain-risk policy | Not specified; must be reviewed |
 | Maximum premium rate | Deterministic safety ceiling | Not specified; must be reviewed |
@@ -66,8 +66,10 @@ gate.
 
 ## Next sequence
 
-1. Assemble and cite `bench/data/corpus.jsonl`.
-2. Score it and publish the calibration/threshold derivation.
+1. ~~Assemble and cite `bench/data/corpus.jsonl`.~~ Done — 229 rows.
+2. ~~Score it and publish the calibration/threshold derivation.~~ Done, and the
+   result is negative: no threshold is derivable. Do not re-run it; see
+   `HANDOFF.md` §4a before spending anything further.
 3. Review the non-benchmark runtime controls listed above.
 4. Set `XCOVER_ENVIRONMENT` and add the reviewed values in `.env`.
 5. Run the agent against a clean eligible venue, then record one quote and one

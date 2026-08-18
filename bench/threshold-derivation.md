@@ -187,3 +187,42 @@ The corpus is too easy and it leaks. A usable calibration needs scenarios the mo
 resolve from memory — recent or obscure events, and situations described by their state
 rather than by their protocol's name. That is a corpus rebuild, not a re-run, and it is
 not attempted here.
+
+---
+
+# Addendum: two leaks found and one that cannot be closed
+
+The derivation above was run on scenarios that named the protocol. Two further experiments
+were run afterwards to test whether the 99.1% accuracy was real. It is not. Full detail and
+the data files are in `README.md`; the conclusion for this document is:
+
+1. **Naming the protocol leaks the outcome.** No evidence at all still scored 17/20.
+2. **Anonymising the scenario closes that leak** — 12/20, chance being 10/20.
+3. **Retrieval then leaks it instead.** 99.8% of retrieved evidence carries the scenario's
+   own label, and each row's `outcome` field states it verbatim. The 54/54 that anonymised
+   scoring achieved with evidence is label propagation from the neighbourhood.
+
+**The conclusion of §5 above is unchanged and now better supported:** no confidence
+threshold is derived, and none can be derived from this corpus. The calibration curve is
+flat because the task, as constructed, is answerable without judgement — which is also why
+confidence carries no information about accuracy.
+
+## The one number a future session must not invent
+
+`PRICING_CONFIDENCE_THRESHOLD_BPS` has no measured value. Whatever is placed there to make
+the agent start is an operator's choice and must be labelled as one everywhere it appears.
+Do not write the spec's sentence — *the threshold was not chosen, it was measured* — about
+this system until a corpus exists that can support it.
+
+## Usable outputs from the scored runs
+
+These describe the distribution of the model's own output rather than claiming anything
+about its accuracy, so they survive the leaks and can be used as reviewed bounds:
+
+- **Ensemble disagreement** across 228 scenarios: mean 993 bp, p90 2,000 bp, max 3,000 bp.
+- **Uncertainty loading** across 228 scenarios: mean 4,532 bp, p90 6,000 bp, max 7,000 bp.
+
+A `PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS` at or slightly above the p90 of 2,000 bp, and a
+`PRICING_MAX_UNCERTAINTY_LOADING_BPS` near the observed maximum of 7,000 bp, are defensible
+as *measured distributions of this model on this corpus* — and must be described that way,
+not as risk-calibrated bounds.

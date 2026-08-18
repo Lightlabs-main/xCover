@@ -48,7 +48,10 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | Threshold derivation | **Started for contract terms only.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound. Pricing-agent confidence and runtime controls are not yet derived; provenance is in `docs/pricing-agent.md`. |
 | Pricing agent | Scaffolded in `packages/agent`; **11 unit tests passing**, covering signing, canonical replay hashing, the two-pass gate/refusal path, fourteen named gate reasons, evidence citation, and environment pairing. The assessment call now runs on the official SDK against `claude-opus-5` and has been **exercised end to end against the live API**. Corpus and reviewed runtime controls remain pending, so no quote is claimed. |
 | Benchmark corpus | **Assembled — 229 rows, every citation fetched and checked.** 148 incidents cited to `rekt.news`, 81 judged-valid audit findings cited to Code4rena issues, 156 distinct protocols. Method, provenance and stated weaknesses in `bench/README.md`. |
-| Benchmark scoring | **Harness written; 20-scenario balanced pilot run; full run blocked on API credit.** The pilot separates the classes perfectly (mean loss likelihood 8692 bp vs 515 bp, 20/20 directional), which is too clean to accept: the two halves of the corpus are written in different words. The no-evidence control that would test for that leakage is the run that hit the credit limit. **No threshold may be derived until the control has run.** |
+| Benchmark scoring | **Complete, and the result is negative.** 228 of 229 scored. Confidence failed calibration: accuracy is flat at ~99% across every stated-confidence bin, stated 39% against 99% observed, not monotonic. Three controls then showed every route to that accuracy is an artifact — naming the protocol leaks the outcome (17/20 with no evidence), anonymising fixes that (12/20), and retrieval then leaks it instead (99.8% of retrieved neighbours share the scenario's label). See `bench/threshold-derivation.md`. |
+| Confidence threshold | **Not derived, and not derivable from this corpus.** `PRICING_CONFIDENCE_THRESHOLD_BPS` has no measured value; any value placed there is an operator choice and must be labelled as one. The spec's sentence — *the threshold was not chosen, it was measured* — must not be written about this system yet. |
+| Disagreement / uncertainty bounds | **Measured across 228 scenarios.** Disagreement mean 993 bp, p90 2,000 bp, max 3,000 bp. Uncertainty loading mean 4,532 bp, p90 6,000 bp, max 7,000 bp. Usable as reviewed bounds if described as distributions of this model's output, not as risk-calibrated limits. |
+| API budget | **$9.00 spent, of which ~$4 was avoidable** — a full run was launched on a cost projected from a no-evidence control, understating it by more than half. Measured rates and the rule against cross-projecting are in `bench/README.md`. |
 | Frontend | Not started |
 | X account | Not created |
 
@@ -90,20 +93,27 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. **Top up the Anthropic API credit** — the scoring run stopped on
-   `credit balance is too low`. Then run the no-evidence control
-   (`node --import tsx bench/score.mts --balanced --noEvidence`) before anything
-   else: if accuracy survives it, the benchmark is measuring how the corpus is
-   written rather than the model's judgement, and the README must say so instead
-   of publishing an accuracy figure. Only after that, score all 229 rows and
-   derive the confidence, disagreement and uncertainty gates.
-2. Set the reviewed agent controls in `.env`. The corrected testnet venue has a
-   non-zero deficit from the completed payout lifecycle, so it must refuse there
-   until a clean eligible venue is available.
-3. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
+1. **Do not re-run the scoring.** The calibration question is settled and the
+   answer is negative — see `HANDOFF.md` §4a. Producing a usable threshold needs
+   negative scenarios drawn from the same source and vocabulary as the positives,
+   which is a sourcing problem, not a budget one. If a new corpus is attempted,
+   run the two free diagnostics and then the $0.25 control before any full run.
+2. **Decide the deployed model and label the threshold honestly.** `.env` names
+   `claude-opus-5`; the benchmark ran on `claude-sonnet-5` at `effort: low`, so
+   the existing scores do not calibrate an Opus 5 deployment. Whatever value is
+   put in `PRICING_CONFIDENCE_THRESHOLD_BPS` to let the agent start must be
+   described as an operator choice in `.env.example`, `docs/pricing-agent.md` and
+   the README.
+3. **Write the README section on the negative result.** It is the strongest
+   quantitative claim available: the confidence signal was measured, it failed,
+   and the benchmark's own weaknesses were measured and published. State plainly
+   that no live quote has been issued.
+4. The corrected testnet venue has a non-zero deficit from the completed payout
+   lifecycle, so the agent must refuse there until a clean eligible venue exists.
+5. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
    verify roles/oracle/venue/terms on chain, and commit the mainnet record only
    after the corrected testnet record is present.
-4. Finish the frontend, README figures, demo video, X account and first build post.
+6. Finish the frontend, README figures, demo video, X account and first build post.
 
 ---
 
@@ -157,6 +167,7 @@ the refusal path, the testnet→mainnet sequence.
 | 17 Aug 2026 | Re-checked every absence-asserting test by mutation. The invariants and separation suite all hold. Found that `payClaim`'s payout cap had no test at all and that `CoverPool` had no unit file: the invariant handler bounded the payout to `reserved + 1`, so the fuzzer could overpay by one wei and deleting the cap left every invariant green. Over-paying is theft rather than insolvency, so no invariant can see it — `test/unit/CoverPool.t.sol` added to assert the pool's guards directly. |
 | 17 Aug 2026 | Closed the deficit-trigger gap. Ten unit tests and two fork tests written for the pro-rata payout and the 50 bp floor, each mutation-checked against the original bug. Re-ran the fork suite, which had not run since the change: two tests failed because the fixed 250,000 USDT it plants is 49.8 bp of the live reserve and now sits under the floor, and the transient-deficit test was passing for that reason rather than the one it names. Fork tests now size the deficit as a share of the live reserve. 127 tests passing. `bench/threshold-derivation.md` written. |
 | 17 Aug 2026 | Correctness batch completed in source: fixed Aave oracle/aToken wiring, disabled unsafe independent policy/share transfers, enforced full-window bounded-cadence observations, fixed zero-capital share epochs, and set the next testnet demo floor to 5,000 bp. Full suite: 139 passing; live fork: 10 passing. |
+| 18 Aug 2026 | Built the 229-row cited corpus and scored it in full. The confidence signal failed calibration — accuracy flat at ~99% across every bin, stated 39% against 99% observed, not monotonic — so no threshold is derived. Three controls then established that the accuracy itself is an artifact: naming the protocol scored 17/20 with no evidence at all, anonymising dropped it to 12/20, and with retrieval restored 99.8% of retrieved neighbours carried the scenario's own label, so 54/54 was label propagation. The cause is structural — the two halves come from different sources written in different vocabulary — and is recorded in `bench/README.md` with the measured cost model. $9.00 spent, ~$4 of it avoidable through a bad cost projection. Handover written to `HANDOFF.md` §4a. |
 | 18 Aug 2026 | Audited the pricing agent against the live API and found it could never have quoted: the configured `claude-3-5-sonnet-20241022` returns HTTP 404 for this key, and the hand-rolled request also sent `temperature`, which the current models reject. Both faults surfaced only as a refusal, which is a correct outcome here and so hid them. Moved the call to the official SDK on `claude-opus-5` with adaptive thinking, dropped the sampling parameters, and ran a full assessment end to end against the live API. The run exposed a third fault: the model cited `live-chain-state` for facts read from the chain and the citation validator rejected the whole assessment — that id is now reserved, named in the prompt, and refused to the corpus. Also paired the viem chain descriptor to the environment, made replay lookup case-insensitive, and added six tests including a fourteen-reason gate table. 11 agent tests and 129 off-fork contract tests passing; the two new absence assertions were mutation-checked. |
 | 18 Aug 2026 | Broadcast corrected testnet set at block 38581492 and merged seven creation transaction hashes into the deployment record. Completed the live lifecycle: policy #1, signed refusal, 2,500 tUSDT induced deficit, five observations at 20-block gaps, trigger 1 (`ReserveDeficit`), and 2,500 tUSDT settlement. Direct reads confirmed policy `Paid`, pool capital 97,500 tUSDT, outstanding cover 0, and venue balance 7,500 tUSDT against 10,000 owed. |
 

@@ -34,6 +34,10 @@ const limit = Number(args.limit ?? 0);
 // from evidence, and it must be reported as measuring that instead.
 const noEvidence = "noEvidence" in args;
 const balanced = "balanced" in args;
+// Effort is a run parameter, not a constant. A calibration measures one configuration, so
+// the effort the corpus is scored at is the effort the deployed agent must serve at — and
+// it is also almost the entire cost of a run.
+const effort = (args.effort ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
 const concurrency = Number(args.concurrency ?? 6);
 const out = resolve(root, args.out ?? "bench/data/scores.jsonl");
 const model = process.env.ANTHROPIC_MODEL!;
@@ -124,7 +128,7 @@ const int = (v: unknown, field: string): number => {
 async function pass(framing: string, scenario: Row, evidence: ReturnType<typeof retrieve>) {
   const response = await client.messages.create({
     model, max_tokens: 16_000, thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
+    output_config: { effort },
     messages: [{ role: "user", content: prompt(framing, scenario, evidence) }],
   });
   if (response.stop_reason === "refusal") throw new Error("model declined");
@@ -144,6 +148,8 @@ async function pass(framing: string, scenario: Row, evidence: ReturnType<typeof 
     confidenceBps: int(raw.confidenceBps, "confidenceBps"),
     uncertaintyLoadingBps: int(raw.uncertaintyLoadingBps, "uncertaintyLoadingBps"),
     missingFacts: (raw.missingFacts as string[]) ?? [],
+    // Recorded so a run's cost is read off the run instead of estimated before it.
+    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
   };
 }
 
@@ -169,6 +175,9 @@ async function scoreOne(scenario: Row) {
     ),
     uncertaintyLoadingBps: Math.round((a.uncertaintyLoadingBps + b.uncertaintyLoadingBps) / 2),
     missingFactCount: new Set([...a.missingFacts, ...b.missingFacts]).size,
+    model, effort, noEvidence,
+    inputTokens: a.usage.input + b.usage.input,
+    outputTokens: a.usage.output + b.usage.output,
     passes: [a, b],
   };
 }
@@ -210,3 +219,20 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 console.error(`scored ${ok}, failed ${failed}`);
+
+const RATES: Record<string, { input: number; output: number }> = {
+  "claude-opus-5": { input: 5, output: 25 },
+  "claude-sonnet-5": { input: 2, output: 10 }, // introductory rate through 2026-08-31
+};
+const rate = RATES[model];
+const priced = readFileSync(out, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
+  .filter((r: { inputTokens?: number }) => typeof r.inputTokens === "number");
+if (rate && priced.length > 0) {
+  const input = priced.reduce((t: number, r: { inputTokens: number }) => t + r.inputTokens, 0);
+  const output = priced.reduce((t: number, r: { outputTokens: number }) => t + r.outputTokens, 0);
+  const spent = (input / 1e6) * rate.input + (output / 1e6) * rate.output;
+  console.error(
+    `usage over ${priced.length} scenarios (${model}, effort=${effort}): ${input} in / ${output} out, ` +
+    `$${spent.toFixed(3)} spent, $${((spent / priced.length) * corpus.length).toFixed(2)} projected for all ${corpus.length}`,
+  );
+}

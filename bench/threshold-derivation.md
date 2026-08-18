@@ -91,3 +91,99 @@ code and in `docs/deployments.md`. They must be reviewed before mainnet.
 - `liquidityFloorBps` — currently 10,000, i.e. redeemable liquidity below the
   policy's own cover is a redemption failure.
 - The waiting period and the daily issuance cap.
+
+---
+
+# Confidence gate — the derivation, and why it does not produce a threshold
+
+**Result: the confidence signal failed calibration on this corpus, so no confidence
+threshold is derived from it.** SPEC §5.4 anticipates this branch explicitly — *"if
+confidence is not monotonic with accuracy, it is not a usable signal and the README
+must say so"* — and this is that case. What follows is the working.
+
+## The run
+
+229 scenarios, 228 scored, one unscored (`incident-compound-rekt`: the model returned
+malformed JSON; it is recorded as an error, never as a guess). Leave-one-out retrieval,
+two framings per scenario, `claude-sonnet-5` at `effort: low`. Raw per-scenario output is
+in `data/scores-sonnet5-low.jsonl`; the control is in `data/control-sonnet5-low.jsonl`.
+
+## 1. Bin by stated confidence, plot stated against observed
+
+| Stated confidence | n | Observed accuracy | Mean stated |
+|---|---|---|---|
+| 0–20% | 5 | 100.0% | 15.0% |
+| 20–30% | 35 | 94.3% | 23.3% |
+| 30–40% | 92 | 100.0% | 31.2% |
+| 40–50% | 32 | 100.0% | 42.4% |
+| 50–60% | 16 | 100.0% | 54.5% |
+| 60–70% | 47 | 100.0% | 61.7% |
+| 70–80% | 1 | 100.0% | 70.0% |
+
+## 2. Monotonicity — fails
+
+Accuracy is not non-decreasing in stated confidence: it is 100% in the lowest bin, dips
+to 94.3% in the second, and is 100% everywhere above. The curve is **flat**, not sloped.
+Splitting at the median confidence (35%) gives 100.0% accuracy above and 98.2% below — a
+1.8 point difference across the entire range of the signal.
+
+A gate needs confidence to separate cases it should decline from cases it should price.
+This one does not separate anything, so there is no operating point to choose.
+
+## 3. The overconfidence offset — measured, and negative
+
+Mean stated confidence 39.3%; observed accuracy 99.1%. The offset is **−60 points**: the
+model is not overconfident, it is severely *under*confident. Correcting for it would mean
+lowering the gate until it declines almost nothing, which is not a safety property.
+
+## 4. Choosing an operating point by cost asymmetry — not possible here
+
+| Threshold | Quotes | Accuracy on quotes | Refusals | Refusal precision |
+|---|---|---|---|---|
+| 20% | 223 | 36.3% | 5 | 100.0% |
+| 30% | 188 | 43.1% | 40 | 100.0% |
+| 40% | 96 | 71.9% | 132 | 90.9% |
+| 50% | 64 | 87.5% | 164 | 84.8% |
+| 60% | 48 | 97.9% | 180 | 81.1% |
+| 65% | 17 | 100.0% | 211 | 69.7% |
+| 70% | 1 | 100.0% | 227 | 64.8% |
+
+This table looks like a usable trade-off and is not one. 35.5% of the corpus is `no_loss`,
+so a gate that quotes blindly is already "36% accurate on quotes". Accuracy on quotes rises
+with the threshold because the surviving sample shifts toward the minority class, not
+because the gate is selecting well — and by the point it reads 100%, it is quoting 17 cases
+out of 228. Reading a threshold off this table would be reading the class mix.
+
+## 5. Why the accuracy figure itself cannot be published as competence
+
+Overall directional accuracy is 99.1%. That is not credible as risk prediction, and the
+control run says why: **with retrieval disabled entirely, accuracy was 17/20 against a
+chance rate of 10/20.** The model recognises Balancer, Yearn and Badger as protocols that
+were exploited. The benchmark is substantially measuring recall of well-known incidents,
+not judgement from cited evidence. See `README.md` for the corpus's framing weaknesses.
+
+The one thing the control did show in the model's favour: removing the evidence dropped
+mean stated confidence on loss scenarios from 5,570 bp to 3,450 bp. It reports lower
+confidence when it has less to go on. That is the right direction — it is simply not
+strong enough, or monotonic enough, to gate on.
+
+## 6. What this means for the deployed agent
+
+`PRICING_CONFIDENCE_THRESHOLD_BPS` is **not derived and must not be presented as derived.**
+The sentence §5.4 asks for — *the threshold was not chosen, it was measured* — cannot
+honestly be written about this system today. Any value placed in that variable to make the
+agent start is an operator's choice and must be labelled as one, in `.env.example`, in
+`docs/pricing-agent.md` and in the README.
+
+Two measurements from the same run are usable as reviewed bounds, since they are
+distributions of the model's own output rather than claims about its accuracy:
+
+- **Ensemble disagreement**: mean 993 bp, p90 2,000 bp, max 3,000 bp across 228 scenarios.
+- **Uncertainty loading**: mean 4,532 bp, p90 6,000 bp, max 7,000 bp.
+
+## 7. What would fix this
+
+The corpus is too easy and it leaks. A usable calibration needs scenarios the model cannot
+resolve from memory — recent or obscure events, and situations described by their state
+rather than by their protocol's name. That is a corpus rebuild, not a re-run, and it is
+not attempted here.

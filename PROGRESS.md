@@ -47,7 +47,8 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | Deficit trigger | **Fixed and proven.** Pays pro-rata above a 50 bp floor. Unit, live-fork and corrected testnet lifecycle evidence cover dust rejection, both sides of the floor, pro-rata payout, smallest-share-in-window, empty reserve, rounding and trigger precedence. |
 | Threshold derivation | **Started for contract terms only.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound. Pricing-agent confidence and runtime controls are not yet derived; provenance is in `docs/pricing-agent.md`. |
 | Pricing agent | Scaffolded in `packages/agent`; **11 unit tests passing**, covering signing, canonical replay hashing, the two-pass gate/refusal path, fourteen named gate reasons, evidence citation, and environment pairing. The assessment call now runs on the official SDK against `claude-opus-5` and has been **exercised end to end against the live API**. Corpus and reviewed runtime controls remain pending, so no quote is claimed. |
-| Benchmark corpus | Not started — required artifact is `bench/data/corpus.jsonl` with 150–250 cited labelled scenarios |
+| Benchmark corpus | **Assembled — 229 rows, every citation fetched and checked.** 148 incidents cited to `rekt.news`, 81 judged-valid audit findings cited to Code4rena issues, 156 distinct protocols. Method, provenance and stated weaknesses in `bench/README.md`. |
+| Benchmark scoring | **Harness written; 20-scenario balanced pilot run; full run blocked on API credit.** The pilot separates the classes perfectly (mean loss likelihood 8692 bp vs 515 bp, 20/20 directional), which is too clean to accept: the two halves of the corpus are written in different words. The no-evidence control that would test for that leakage is the run that hit the credit limit. **No threshold may be derived until the control has run.** |
 | Frontend | Not started |
 | X account | Not created |
 
@@ -89,10 +90,13 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. Build `bench/data/corpus.jsonl`, score it, and derive the confidence,
-   disagreement, and uncertainty gates. Review the remaining runtime controls
-   using `docs/pricing-agent.md`. This is the last artifact blocking a live
-   quote: the model call itself is now proven.
+1. **Top up the Anthropic API credit** — the scoring run stopped on
+   `credit balance is too low`. Then run the no-evidence control
+   (`node --import tsx bench/score.mts --balanced --noEvidence`) before anything
+   else: if accuracy survives it, the benchmark is measuring how the corpus is
+   written rather than the model's judgement, and the README must say so instead
+   of publishing an accuracy figure. Only after that, score all 229 rows and
+   derive the confidence, disagreement and uncertainty gates.
 2. Set the reviewed agent controls in `.env`. The corrected testnet venue has a
    non-zero deficit from the completed payout lifecycle, so it must refuse there
    until a clean eligible venue is available.
@@ -120,7 +124,8 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 ## Blocked
 
 No code blocker remains in the verified batch. The pricing-agent scaffold is
-implemented, but its corpus and reviewed runtime parameters do not exist yet;
+implemented and its corpus exists, but scoring is **blocked on Anthropic API
+credit** (`credit balance is too low`), so no gate threshold is derived yet;
 mainnet is blocked on deployer funding and gas.
 
 Note for pushing from this codespace: the ambient `GITHUB_TOKEN` is refused for

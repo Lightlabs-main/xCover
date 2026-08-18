@@ -67,7 +67,7 @@ function promptFor(framing: string, state: ChainState, evidence: Evidence[]): st
   ].join("\n\n");
 }
 
-function parseResponse(raw: unknown, framing: string, model: string, evidence: Evidence[]): Assessment {
+export function parseResponse(raw: unknown, framing: string, model: string, evidence: Evidence[]): Assessment {
   if (!raw || typeof raw !== "object") throw new AssessmentError("model response was not an object");
   const value = raw as Record<string, unknown>;
   const knownIds = new Set([...evidence.map((item) => item.id), LIVE_STATE_EVIDENCE_ID]);

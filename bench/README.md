@@ -69,3 +69,21 @@ tools/fetch_c4.sh <contest-repos> && python3 tools/build_negatives.py /tmp/c4_fi
 Citations are live third-party URLs. A row whose source stops resolving is a row
 that has lost its evidence, and should be dropped rather than kept on the
 strength of having once been checked.
+
+## Scoring status
+
+A 20-scenario balanced pilot separated the two classes completely — mean loss
+likelihood 8,692 bp against 515 bp, 20 of 20 directionally correct. That is too
+clean to accept at face value. The two halves of this corpus are written in
+different words, and a model that reads the wording rather than the risk would
+produce exactly this result. `bench/score.mts` neutralises the obvious markers
+(`- REKT` suffixes, `Audit finding (…)` classifications) and reduces both halves
+to the same three fields, but narrowing a leak is not the same as closing it.
+
+The test is the control run — the same scenarios with retrieval disabled
+(`--noEvidence`). If accuracy survives with no evidence to reason from, the
+benchmark is measuring the framing and no accuracy figure from it may be
+published. That run is outstanding: it stopped on an Anthropic API credit limit.
+
+**No gate threshold is derived from this corpus yet, and none should be until
+the control has run.**

@@ -124,6 +124,7 @@ packages/contracts/               Foundry project, solc 0.8.28
   script/VerifyIntegration.s.sol  asserts the integration still holds
 deployments/                      per-chain address records, committed evidence
 packages/agent/                   live reads, model-gated pricing, EIP-712 decisions, replay API
+docs/pricing-agent.md             parameter provenance and continuation checklist
 bench/                            benchmark corpus and threshold derivation
 ```
 
@@ -131,8 +132,9 @@ bench/                            benchmark corpus and threshold derivation
 
 All five §4 contracts are written; 139 local contract tests pass; the corrected
 contract set is deployed and lifecycle-proven on X Layer testnet (chain 1952).
-The pricing agent is scaffolded and unit-tested; its benchmark thresholds and
-model credential are intentionally still unset. Mainnet remains undeployed.
+The pricing agent is scaffolded and unit-tested; its API key is present, but its
+model ID, benchmark corpus, and reviewed runtime controls are still unset.
+Mainnet remains undeployed.
 `HANDOFF.md` §4 has the role-wiring table and the design decisions that are
 load-bearing; §5 lists traps already paid for once — read both before writing
 contract or agent code.

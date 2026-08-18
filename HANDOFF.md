@@ -243,8 +243,8 @@ packages/contracts/
   script/VerifyIntegration.s.sol passing against live mainnet
 ```
 
-**Not written yet:** the pricing agent, the benchmark corpus, and the frontend.
-Mainnet is not deployed. X account not created.
+The pricing-agent scaffold is written and unit-tested; the benchmark corpus and
+frontend are not written yet. Mainnet is not deployed. X account not created.
 
 ### How the contracts fit together
 
@@ -424,17 +424,22 @@ implements the read → retrieve → assess → compute → gate pipeline from S
 It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
 serves canonical decision JSON at `GET /decision/:hash`, and treats
 `DECLINE_TO_QUOTE` as a first-class signed result. The signing key needs no gas.
-The benchmark-derived thresholds and `ANTHROPIC_API_KEY` are still unset, so no
-quote is claimed. Done still means one agent-signed quote is consumed by a real
-testnet deposit and one agent-signed refusal is rejected on the same path. The
-current corrected testnet venue has a non-zero residual deficit after the proven
-payout, so its live gate correctly refuses until a clean eligible venue state is
-available.
+The API key is now present in `.env`; `ANTHROPIC_MODEL` and the benchmark-derived
+thresholds are still unset, so no quote is claimed. The 50 bp deficit floor and
+`97_000_000` depeg bound are spec-defined; the confidence, disagreement,
+uncertainty, oracle, capital-margin, premium-ceiling, and quote-TTL values are
+runtime/review parameters, not hidden spec defaults. The full provenance table
+is in `docs/pricing-agent.md`. Done still means one agent-signed quote is
+consumed by a real testnet deposit and one agent-signed refusal is rejected on
+the same path. The current corrected testnet venue has a non-zero residual
+deficit after the proven payout, so its live gate correctly refuses until a clean
+eligible venue state is available.
 
-**Benchmark corpus — not started.** Complete the corpus behind
+**Benchmark corpus — not started.** Create `bench/data/corpus.jsonl` with the
+150–250 cited labelled scenarios required by SPEC §5.4, score it, and complete
 `bench/threshold-derivation.md`. The 50 bp deficit floor and $0.97 depeg bound
-are documented; the rest of the deployment parameters remain reasoned defaults
-and must be reviewed before mainnet.
+are already defined; do not describe the remaining runtime parameters as if the
+spec supplied numeric defaults. See `docs/pricing-agent.md`.
 
 **Mainnet deployment — not done.** First rerun `VerifyIntegration.s.sol` against
 chain 196, fund the deployer with the minimum real capital and gas, then run

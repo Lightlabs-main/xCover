@@ -191,8 +191,9 @@ evidence, runs two differently framed model assessments, computes the rate in
 deterministic code, applies refusal gates, signs the EIP-712 decision, and serves
 `GET /decision/:hash`. It does not submit transactions or hold underwriting
 permissions. The benchmark-derived thresholds and Anthropic credential remain
-deliberately unset until the corpus is built; the agent refuses rather than
-inventing a price when either is unavailable.
+deliberately incomplete until the corpus is built: the API key is present, but
+the model ID and benchmark/runtime controls are not. The agent refuses rather
+than inventing a price when required evidence or configuration is unavailable.
 
 ### Adverse selection controls
 

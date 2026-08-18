@@ -659,6 +659,32 @@ defensible.
                Sign the quote, post to PricingRegistry with the decision hash.
 ```
 
+### 5.2.1 Parameter provenance
+
+The pipeline above defines behavior, but it does not define a value for every
+runtime control. Do not silently turn an implementation default into a product
+claim. The current provenance is:
+
+| Control | Status | Source of truth |
+|---|---|---|
+| `deficitFloorBps = 50` | **Defined** | Contract terms and `bench/threshold-derivation.md` |
+| `depegLowerBound = 97_000_000` (8 decimals) | **Defined** | Contract terms and `bench/threshold-derivation.md` |
+| Confidence gate threshold | **Must be derived** | §5.4 calibration curve; not an intuition/default |
+| Ensemble disagreement bound | **Must be derived/reviewed** | Benchmark disagreement measurements |
+| Uncertainty-loading bound | **Must be derived/reviewed** | Cross-deployment extrapolation and benchmark evidence |
+| Capital-cost margin | **Must be reviewed** | Underwriting economics; no numeric value is specified here |
+| Oracle freshness and source-deviation bounds | **Must be reviewed** | Live oracle cadence and chain-risk policy; no numeric value is specified here |
+| Maximum premium rate | **Must be reviewed** | Deterministic safety ceiling; no numeric value is specified here |
+| Quote validity window | **Must be reviewed** | The quote must be short-lived and block-based; no exact TTL is specified here |
+| Anthropic model ID, engine version, environment, corpus path | **Runtime configuration** | Deployment/operator configuration, not model evidence |
+
+The implementation names these runtime settings in `.env.example` and refuses
+to start without the controls it needs. Blank values are intentional until the
+benchmark and parameter review produce them. The required corpus artifact is
+`bench/data/corpus.jsonl`, containing the 150–250 labelled scenarios required by
+§5.4; it does not exist until those scenarios and their source citations have
+been assembled.
+
 ### 5.3 The honest problem: no loss history
 
 Aave on X Layer has months of history and zero incidents. There is no local base

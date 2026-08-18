@@ -10,7 +10,8 @@ claim role. A caller submits the returned `decision` and `signature` to
 `PricingRegistry.recordDecision`. Both quotes and refusals are signed and
 replayable at `GET /decision/:hash`.
 
-Required runtime configuration is documented in the root `.env.example`.
+Required runtime configuration is documented in the root `.env.example` and the
+parameter provenance is recorded in [`docs/pricing-agent.md`](../../docs/pricing-agent.md).
 `XCOVER_ENVIRONMENT` is mandatory. The loader reads the matching committed
 deployment record and checks the live venue before opening a route. Pricing
 thresholds are intentionally required configuration: they must come from the
@@ -33,4 +34,3 @@ curl -X POST http://127.0.0.1:8787/decision \
 The current corrected testnet venue has a residual reserve deficit from the
 completed payout rehearsal. A live request there must therefore return a signed
 `DECLINE_TO_QUOTE` until a clean eligible venue state is available.
-

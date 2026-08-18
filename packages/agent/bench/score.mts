@@ -173,9 +173,15 @@ async function scoreOne(scenario: Row) {
   };
 }
 
-const done = new Set(
-  existsSync(out) ? readFileSync(out, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).id as string) : [],
-);
+// Resume only over scenarios that actually produced a score. A row recorded with an error
+// is a scenario still owed an answer — a run stopped by a credit limit or a rate limit must
+// pick those up again, not treat "we failed once" as "we are done".
+const previous = existsSync(out)
+  ? readFileSync(out, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { id: string; error?: string })
+  : [];
+const done = new Set(previous.filter((r) => !r.error).map((r) => r.id));
+const retryable = previous.filter((r) => r.error).length;
+if (retryable > 0) console.error(`${retryable} previously failed scenarios will be retried`);
 let pending = corpus.filter((r) => !done.has(r.id));
 if (balanced) {
   // Sampling in file order takes the earliest rows, which are all incidents; a run that

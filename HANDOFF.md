@@ -424,8 +424,9 @@ implements the read → retrieve → assess → compute → gate pipeline from S
 It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
 serves canonical decision JSON at `GET /decision/:hash`, and treats
 `DECLINE_TO_QUOTE` as a first-class signed result. The signing key needs no gas.
-The API key is now present in `.env`; `ANTHROPIC_MODEL` and the benchmark-derived
-thresholds are still unset, so no quote is claimed. The 50 bp deficit floor and
+The API key and `ANTHROPIC_MODEL=claude-3-5-sonnet-20241022` are now present in
+`.env`; the benchmark-derived thresholds are still unset, so no quote is
+claimed. The 50 bp deficit floor and
 `97_000_000` depeg bound are spec-defined; the confidence, disagreement,
 uncertainty, oracle, capital-margin, premium-ceiling, and quote-TTL values are
 runtime/review parameters, not hidden spec defaults. The full provenance table

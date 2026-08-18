@@ -21,7 +21,7 @@ benchmark calibration.
 
 | Setting/artifact | Classification | Current status |
 |---|---|---|
-| `ANTHROPIC_MODEL` | Provider configuration | Must be a valid model ID for the supplied API key |
+| `ANTHROPIC_MODEL` | Provider configuration | Set to `claude-3-5-sonnet-20241022` for the current direct API configuration |
 | `XCOVER_ENVIRONMENT` | Deployment selection | Must be `testnet` or `mainnet`; the loader checks the live venue |
 | `PRICING_ENGINE_VERSION` | Decision metadata | Set to `pricing-1.0.0/xlayer-usdt` in the example |
 | `QUOTE_TTL_BLOCKS` | Runtime policy | Exact value is not specified by §5; review before mainnet |
@@ -51,7 +51,7 @@ gate.
 1. Assemble and cite `bench/data/corpus.jsonl`.
 2. Score it and publish the calibration/threshold derivation.
 3. Review the non-benchmark runtime controls listed above.
-4. Set `ANTHROPIC_MODEL`, `XCOVER_ENVIRONMENT`, and the reviewed values in `.env`.
+4. Verify `ANTHROPIC_MODEL=claude-3-5-sonnet-20241022`, set
+   `XCOVER_ENVIRONMENT`, and add the reviewed values in `.env`.
 5. Run the agent against a clean eligible venue, then record one quote and one
    refusal through the real `PricingRegistry` path.
-

@@ -46,7 +46,7 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Deficit trigger | **Fixed and proven.** Pays pro-rata above a 50 bp floor. Unit, live-fork and corrected testnet lifecycle evidence cover dust rejection, both sides of the floor, pro-rata payout, smallest-share-in-window, empty reserve, rounding and trigger precedence. |
 | Threshold derivation | **Started for contract terms only.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound. Pricing-agent confidence and runtime controls are not yet derived; provenance is in `docs/pricing-agent.md`. |
-| Pricing agent | Scaffolded in `packages/agent`; unit-tested signing, canonical replay hashing, two-pass gate/refusal path, and environment pairing. API key is present; model ID, corpus, and reviewed runtime controls remain pending. |
+| Pricing agent | Scaffolded in `packages/agent`; unit-tested signing, canonical replay hashing, two-pass gate/refusal path, and environment pairing. API key and direct API model ID are present; corpus and reviewed runtime controls remain pending. |
 | Benchmark corpus | Not started — required artifact is `bench/data/corpus.jsonl` with 150–250 cited labelled scenarios |
 | Frontend | Not started |
 | X account | Not created |
@@ -92,9 +92,9 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 1. Build `bench/data/corpus.jsonl`, score it, and derive the confidence,
    disagreement, and uncertainty gates. Review the remaining runtime controls
    using `docs/pricing-agent.md`.
-2. Set a valid `ANTHROPIC_MODEL` and reviewed agent configuration. The corrected
-   testnet venue has a non-zero deficit from the completed payout lifecycle, so
-   it must refuse there until a clean eligible venue is available.
+2. Verify the configured direct API model and set the reviewed agent controls.
+   The corrected testnet venue has a non-zero deficit from the completed payout
+   lifecycle, so it must refuse there until a clean eligible venue is available.
 3. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
    verify roles/oracle/venue/terms on chain, and commit the mainnet record only
    after the corrected testnet record is present.

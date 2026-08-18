@@ -63,6 +63,9 @@ contract DeployMainnet is DeployBase {
             // inside the 100 rps per-IP RPC limit that caps keeper frequency.
             windowBlocks: 1800,
             minSamples: 30,
+            // At most one minute between samples. The keeper should target materially faster;
+            // this bound prevents a sparse cluster of samples from representing the whole window.
+            maxObservationGapBlocks: 60,
             // $0.97, same reasoning and same evidence as testnet: the live oracle read $0.99896524
             // under normal conditions, about 10 bp off peg.
             depegLowerBound: 97_000_000,
@@ -82,7 +85,9 @@ contract DeployMainnet is DeployBase {
             IERC20(XLayerAddresses.USDT),
             IAaveV3Pool(XLayerAddresses.POOL),
             IERC20(XLayerAddresses.USDT_A_TOKEN),
-            IAaveOracle(XLayerAddresses.USDT_ORACLE),
+            // This must be Aave's aggregate oracle. USDT_PRICE_FEED is a Chainlink-style capped feed,
+            // not an IAaveOracle and does not implement getAssetPrice(address).
+            IAaveOracle(XLayerAddresses.ORACLE),
             deployer
         );
 

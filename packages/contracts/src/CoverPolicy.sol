@@ -7,7 +7,8 @@ import {ICoverPolicy} from "./interfaces/ICoverPolicy.sol";
 import {ICoverPool} from "./interfaces/ICoverPool.sol";
 
 /// @title CoverPolicy
-/// @notice ERC-721 cover positions. The token is the position (SPEC §4.2).
+/// @notice ERC-721 cover positions. The token is the position (SPEC §4.2), and is non-transferable
+///      in this build because the companion vault position is address-keyed.
 ///
 /// @dev Every policy is minted with capital already locked behind it: `mintPolicy` calls
 ///      `CoverPool.reserveCover` in the same transaction, and the pool reverts if that would
@@ -45,6 +46,10 @@ contract CoverPolicy is ICoverPolicy, ERC721, AccessControl {
 
     /// @notice Ceiling on new cover written per reserve per day, in the reserve's decimals.
     uint256 public immutable dailyCoverCap;
+
+    /// @notice Direct policy transfers are disabled because xCoverVault positions are address-keyed.
+    ///      A future transferable design must move the policy and its vault shares atomically.
+    error PositionTransfersDisabled();
 
     uint256 internal _nextPolicyId = 1;
 
@@ -214,6 +219,19 @@ contract CoverPolicy is ICoverPolicy, ERC721, AccessControl {
     {
         if (actual == PolicyState.None) revert UnknownPolicy(policyId);
         if (actual != expected) revert InvalidState(policyId, actual, expected);
+    }
+
+    /// @dev Minting and burning remain available to the lifecycle. A live transfer would move the
+    /// ERC-721 owner without moving xCoverVault's address-keyed `positions` entry, leaving either
+    /// the buyer unable to exit or the seller able to cancel the buyer's cover.
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address from)
+    {
+        from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0)) revert PositionTransfersDisabled();
+        return super._update(to, tokenId, auth);
     }
 
     // --- ERC165 ---------------------------------------------------------------------------

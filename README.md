@@ -220,13 +220,13 @@ end against a real dependency on a real chain.
 | Separation tests (§4.7) | All five written and passing |
 | `IYieldVenue` / `TestnetVenue` | Written; unit tested |
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
-| `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave** |
-| `xCoverVault` | Written; covered deposit and every refusal path unit tested |
+| `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave**; bounded-cadence sampling now enforced |
+| `xCoverVault` | Written; covered deposit and every refusal path unit tested; direct share transfers disabled until atomic position transfer exists |
 | Pricing agent | Not written |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
 | Deployment scripts | Written; shared wiring, mainnet gated on the testnet record existing |
-| **X Layer testnet (1952)** | Deployed, but **superseded** — the live contracts carry a deficit trigger since found defective and fixed; redeployment pending. See [`docs/deployments.md`](docs/deployments.md) |
+| **X Layer testnet (1952)** | **Corrected deployment and lifecycle proof complete** at block 38581492; a 2,500 tUSDT deficit paid 2,500 tUSDT pro rata. See [`docs/deployments.md`](docs/deployments.md) |
 | X Layer mainnet (196) | Not deployed |
 
 Two things have run against real Aave on a mainnet fork. `AaveV3Venue` supplies real
@@ -236,16 +236,12 @@ runs the whole path — deposit, cover, trigger, settlement — paying 50,000 US
 policy holder. See [The payout test](#the-payout-test) for exactly what is real in it
 and what is not.
 
-**The full contract set is deployed and running on X Layer testnet (chain 1952)**, where
-the entire path has executed on chain: underwriting capital, a signed quote, a covered
-deposit minted in one transaction, a recorded refusal, a real deficit, windowed
-observations, a `ReserveDeficit` trigger, and **a 10,000 tUSDT claim paid to the policy
-holder**. The deficit was real — assets left the venue, which still owes them — so the
-payout settled against an actual shortfall rather than a flag. What testnet
-cannot show is the Aave integration, because Aave V3 is not deployed there — that is
-what the fork tests cover, and what the mainnet deployment will. Which venue backs
-which network, and how the two parameter sets differ, is set out in
-[`docs/deployments.md`](docs/deployments.md). Mainnet is not deployed yet.
+**The corrected full contract set is deployed on X Layer testnet (chain 1952)** at
+block 38581492. The live run completed underwriting capital, a signed quote, a
+covered deposit, a refusal, a real 2,500 tUSDT write-off, five observations at
+20-block gaps, a `ReserveDeficit` evaluation and a 2,500 tUSDT payout. What testnet
+cannot show is the Aave integration, because Aave V3 is not deployed there — that
+is what the fork tests cover. Mainnet is not deployed yet.
 
 ## Verified integration facts
 

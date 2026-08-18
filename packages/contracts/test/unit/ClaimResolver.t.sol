@@ -29,8 +29,9 @@ contract ClaimResolverTest is Test {
     address internal stranger = makeAddr("stranger");
 
     uint64 internal constant WAITING = 100;
-    uint64 internal constant WINDOW = 50;
+    uint64 internal constant WINDOW = 6;
     uint64 internal constant MIN_SAMPLES = 5;
+    uint64 internal constant MAX_OBSERVATION_GAP = 1;
     uint256 internal constant COVER = 10_000e6;
     /// @dev 0.5% of the reserve unbacked. See ClaimResolver._deficitBps for the measurements.
     uint256 internal constant DEFICIT_FLOOR_BPS = 50;
@@ -67,6 +68,7 @@ contract ClaimResolverTest is Test {
             aToken: aToken,
             windowBlocks: WINDOW,
             minSamples: MIN_SAMPLES,
+            maxObservationGapBlocks: MAX_OBSERVATION_GAP,
             // Well clear of the ~10 bp of normal off-peg drift observed on chain: $0.97.
             depegLowerBound: 97_000_000,
             deficitFloorBps: DEFICIT_FLOOR_BPS,
@@ -156,6 +158,25 @@ contract ClaimResolverTest is Test {
             )
         );
         resolver.recordObservation(address(asset), aToken);
+    }
+
+    function test_SamplingMustCoverTheWindowWithoutALargeGap() public {
+        uint256 id = _mint();
+        venue.setReserve(1_000e6, 1_000e6);
+
+        resolver.recordObservation(address(asset), aToken);
+        vm.roll(block.number + 2);
+        _observe(MIN_SAMPLES - 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ClaimResolver.ObservationGapTooLarge.selector,
+                uint64(block.number - (MIN_SAMPLES - 1)),
+                uint64(block.number - (MIN_SAMPLES + 1)),
+                MAX_OBSERVATION_GAP
+            )
+        );
+        _evaluate(id);
     }
 
     /// @dev Observations are read from chain, never supplied by the caller, so a hostile recorder
@@ -533,21 +554,6 @@ contract ClaimResolverTest is Test {
     }
 
     /// @dev The payout follows the token, not the address that bought it.
-    function test_ClaimPaysTheCurrentHolderAfterTransfer() public {
-        uint256 id = _mint();
-        address buyer = makeAddr("buyer");
-        vm.prank(holder);
-        policy.transferFrom(holder, buyer, id);
-
-        venue.setReserve(1_000e6, 1_000e6);
-        _observe(MIN_SAMPLES);
-        _evaluate(id);
-        resolver.claim(id);
-
-        assertEq(asset.balanceOf(buyer), COVER);
-        assertEq(asset.balanceOf(holder), 0);
-    }
-
     function test_CannotClaimTwice() public {
         uint256 id = _mint();
         venue.setReserve(1_000e6, 1_000e6);

@@ -259,6 +259,20 @@ contract xCoverVaultTest is Test {
         vault.depositCovered(DEPOSIT, user, q2, TERM);
     }
 
+    function test_VaultSharesAreNonTransferable() public {
+        bytes32 q = _goodQuote();
+        vm.prank(user);
+        (uint256 shares,) = vault.depositCovered(DEPOSIT, user, q, TERM);
+
+        address buyer = makeAddr("buyer");
+        vm.prank(user);
+        vm.expectRevert(xCoverVault.PositionTransfersDisabled.selector);
+        vault.transfer(buyer, shares);
+
+        assertEq(vault.balanceOf(user), shares);
+        assertEq(vault.balanceOf(buyer), 0);
+    }
+
     // --- exit -----------------------------------------------------------------------------
 
     function test_ExitReturnsAssetsAndPaysPremiumToThePool() public {

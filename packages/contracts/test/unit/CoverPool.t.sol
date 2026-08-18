@@ -142,4 +142,41 @@ contract CoverPoolTest is Test {
 
         assertGe(pool.capital(), pool.outstandingCover(), "insolvent after a withdrawal");
     }
+
+    /// @dev A full loss leaves the provider share ledger intact while capital reaches zero. A new
+    ///      depositor must not be priced alongside those dead shares, or the old provider would
+    ///      retain a claim on the new capital. Burning the zero-value shares starts a clean epoch.
+    function test_FullPayoutDoesNotMispriceANewCapitalEpoch() public {
+        vm.prank(vault);
+        pool.reserveCover(2, CAPITAL - COVER);
+
+        vm.startPrank(resolver);
+        pool.payClaim(POLICY_ID, holder, COVER);
+        pool.payClaim(2, holder, CAPITAL - COVER);
+        vm.stopPrank();
+
+        assertEq(pool.capital(), 0);
+        assertEq(pool.outstandingCover(), 0);
+        assertGt(pool.totalShares(), 0, "test did not leave legacy shares behind");
+
+        address newProvider = makeAddr("newProvider");
+        asset.mint(newProvider, 100e6);
+        vm.startPrank(newProvider);
+        asset.approve(address(pool), 100e6);
+        vm.expectRevert(ICoverPool.CapitalFullyPaidOut.selector);
+        pool.depositCapital(100e6);
+        vm.stopPrank();
+
+        // The old provider can burn its now-worthless shares, after which the next deposit is
+        // priced 1:1 and owns the entire fresh capital epoch.
+        uint256 legacyShares = pool.sharesOf(provider);
+        vm.prank(provider);
+        pool.withdrawCapital(legacyShares);
+        assertEq(pool.totalShares(), 0);
+
+        vm.prank(newProvider);
+        uint256 shares = pool.depositCapital(100e6);
+        assertEq(shares, 100e6);
+        assertEq(pool.sharesOf(newProvider), 100e6);
+    }
 }

@@ -60,6 +60,9 @@ contract DeployTestnet is DeployBase {
             // cannot trigger a payout, which is the property the window exists for.
             windowBlocks: 120,
             minSamples: 5,
+            // Five samples across two minutes need a boundary witness and roughly 30-block
+            // cadence. The lifecycle script and judge should target more frequently than this.
+            maxObservationGapBlocks: 30,
             // $0.97. Normal conditions on X Layer already sit ~10 bp off peg, so this clears the
             // observed noise floor by roughly 30x rather than firing on it.
             depegLowerBound: 97_000_000,
@@ -69,8 +72,10 @@ contract DeployTestnet is DeployBase {
             // floor sits eight orders of magnitude above the noise and well under a real solvency
             // event. Without it any dust deficit pays full cover on every policy.
             deficitFloorBps: 50,
-            // Redeemable liquidity below 1x the cover written is a redemption failure.
-            liquidityFloorBps: 10_000
+            // Keep the demo's 25% induced deficit visible as a deficit trigger. The custody venue
+            // holds only this position, so a 100% floor would always let redemption failure mask
+            // the pro-rata deficit. This is testnet-demo policy, not the mainnet floor.
+            liquidityFloorBps: 5_000
         });
 
         vm.startBroadcast(pk);

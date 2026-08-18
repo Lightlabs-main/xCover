@@ -50,8 +50,9 @@ contract ClaimPayoutForkTest is Test {
     address internal stranger = makeAddr("stranger");
 
     uint64 internal constant WAITING = 100;
-    uint64 internal constant WINDOW = 50;
+    uint64 internal constant WINDOW = 6;
     uint64 internal constant MIN_SAMPLES = 5;
+    uint64 internal constant MAX_OBSERVATION_GAP = 1;
     /// @dev 0.5% of the reserve unbacked. See ClaimResolver._deficitBps for the measurements this
     ///      floor was chosen from.
     uint256 internal constant DEFICIT_FLOOR_BPS = 50;
@@ -99,6 +100,7 @@ contract ClaimPayoutForkTest is Test {
             aToken: XLayerAddresses.USDT_A_TOKEN,
             windowBlocks: WINDOW,
             minSamples: MIN_SAMPLES,
+            maxObservationGapBlocks: MAX_OBSERVATION_GAP,
             depegLowerBound: 97_000_000, // clear of the ~10 bp of normal drift
             liquidityFloorBps: 10_000,
             deficitFloorBps: DEFICIT_FLOOR_BPS

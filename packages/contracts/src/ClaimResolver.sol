@@ -57,6 +57,7 @@ contract ClaimResolver is AccessControl {
         address aToken; // its aToken, whose underlying balance is the redeemable liquidity
         uint64 windowBlocks; // the condition must hold across this many blocks
         uint64 minSamples; // and be witnessed at least this many times within them
+        uint64 maxObservationGapBlocks; // no unseen gap may exceed this many blocks
         uint256 depegLowerBound; // oracle price below this is a depeg, 8 decimals
         uint256 liquidityFloorBps; // redeemable liquidity below this share of cover is a failure
         uint256 deficitFloorBps; // deficit below this share of the reserve is not a covered loss
@@ -69,6 +70,18 @@ contract ClaimResolver is AccessControl {
         uint256 price; // the venue's oracle price for the reserve, 8 decimals
         uint256 redeemableLiquidity; // underlying actually available to redeem
         uint256 totalSupplied; // everything supplied to the reserve — the deficit's denominator
+    }
+
+    struct AssessmentState {
+        uint256 samples;
+        uint256 minDeficitBps;
+        uint64 newestBlock;
+        uint64 previousBlock;
+        bool haveSample;
+        bool windowCovered;
+        bool deficitHeld;
+        bool depegHeld;
+        bool illiquidityHeld;
     }
 
     ICoverPool public immutable pool;
@@ -111,6 +124,14 @@ contract ClaimResolver is AccessControl {
     error NoTriggerMet(uint256 policyId);
     /// @notice Fewer observations inside the window than the terms require.
     error InsufficientSamples(uint256 found, uint64 required);
+    /// @notice The observations do not reach back to the beginning of the configured window.
+    error ObservationWindowNotCovered(uint64 oldestBlock, uint256 requiredStart);
+    /// @notice The newest observation is too old to support a current evaluation.
+    error ObservationTooOld(uint64 newestBlock, uint256 currentBlock, uint64 maxGap);
+    /// @notice Two adjacent observations leave too much of the window unseen.
+    error ObservationGapTooLarge(uint64 newerBlock, uint64 olderBlock, uint64 maxGap);
+    /// @notice Sampling terms cannot establish a bounded observation cadence.
+    error InvalidSamplingTerms();
     /// @notice One observation per block; the chain has not moved since the last one.
     error ObservationAlreadyRecorded(uint64 blockNumber);
     /// @notice The terms describe a different reserve than the policy covers.
@@ -217,48 +238,100 @@ contract ClaimResolver is AccessControl {
         return _assess(terms, p.coverAmount);
     }
 
-    /// @dev A trigger holds only if **every** observation inside the window satisfies it. One
-    ///      reading that does not is enough to reject: the covered event is a sustained condition,
-    ///      not a moment.
+    /// @dev A trigger holds only if every sampled observation inside the window satisfies it, the
+    ///      samples span the whole window, the newest sample is fresh, and no adjacent samples are
+    ///      farther apart than the policy allows. This is a bounded-cadence observation guarantee;
+    ///      without the span and gap checks, `minSamples` could be clustered at the end of a window
+    ///      and say nothing about the earlier blocks.
     function _assess(Terms calldata terms, uint256 coverAmount)
         internal
         view
         returns (Trigger, uint256)
     {
+        if (terms.windowBlocks == 0 || terms.minSamples == 0 || terms.maxObservationGapBlocks == 0) {
+            revert InvalidSamplingTerms();
+        }
+
         Observation[] storage obs = _observations[terms.reserve];
 
         uint256 windowStart =
             block.number > terms.windowBlocks ? block.number - terms.windowBlocks : 0;
 
-        uint256 samples;
-        bool deficitHeld = true;
-        bool depegHeld = true;
-        bool illiquidityHeld = true;
-
-        // The smallest deficit share witnessed inside the window. The trigger asserts the condition
-        // held *throughout*, so the payout is what was true at every sample — a one-block spike
-        // cannot inflate it, and a partial recovery is reflected rather than ignored.
-        uint256 minDeficitBps = type(uint256).max;
+        AssessmentState memory state = AssessmentState({
+            samples: 0,
+            minDeficitBps: type(uint256).max,
+            newestBlock: 0,
+            previousBlock: 0,
+            haveSample: false,
+            windowCovered: false,
+            deficitHeld: true,
+            depegHeld: true,
+            illiquidityHeld: true
+        });
 
         // Walk backwards: the window is at the end of the array, so this touches only the recent
-        // observations rather than the whole history.
+        // observations rather than the whole history. One observation just before the boundary is
+        // admitted when it is within the permitted gap, so the condition is witnessed at the
+        // window's leading edge rather than merely after it.
         for (uint256 i = obs.length; i > 0; i--) {
             Observation storage o = obs[i - 1];
-            if (o.blockNumber < windowStart) break;
+            bool boundarySample = o.blockNumber <= windowStart;
+            if (o.blockNumber < windowStart) {
+                if (!state.haveSample || windowStart - o.blockNumber > terms.maxObservationGapBlocks) {
+                    break;
+                }
+            }
 
-            samples++;
+            state.samples++;
+
+            if (!state.haveSample) {
+                state.newestBlock = o.blockNumber;
+                state.haveSample = true;
+            } else {
+                if (state.previousBlock - o.blockNumber > terms.maxObservationGapBlocks) {
+                    revert ObservationGapTooLarge(
+                        state.previousBlock, o.blockNumber, terms.maxObservationGapBlocks
+                    );
+                }
+            }
+            state.previousBlock = o.blockNumber;
 
             uint256 deficitBps = _deficitBps(o);
-            if (deficitBps < terms.deficitFloorBps || deficitBps == 0) deficitHeld = false;
-            if (deficitBps < minDeficitBps) minDeficitBps = deficitBps;
+            if (deficitBps < terms.deficitFloorBps || deficitBps == 0) state.deficitHeld = false;
+            if (deficitBps < state.minDeficitBps) state.minDeficitBps = deficitBps;
 
-            if (o.price >= terms.depegLowerBound) depegHeld = false;
+            if (o.price >= terms.depegLowerBound) state.depegHeld = false;
             if (o.redeemableLiquidity >= (coverAmount * terms.liquidityFloorBps) / 10_000) {
-                illiquidityHeld = false;
+                state.illiquidityHeld = false;
+            }
+
+            if (boundarySample) {
+                state.windowCovered = true;
+                break;
             }
         }
 
-        if (samples < terms.minSamples) revert InsufficientSamples(samples, terms.minSamples);
+        // If the first retained sample is just after the boundary, the permitted cadence itself
+        // covers that short leading interval. This is the normal case when the window starts
+        // between two keeper observations.
+        if (
+            !state.windowCovered && state.haveSample && state.previousBlock >= windowStart
+                && state.previousBlock - windowStart <= terms.maxObservationGapBlocks
+        ) {
+            state.windowCovered = true;
+        }
+
+        if (state.samples < terms.minSamples) {
+            revert InsufficientSamples(state.samples, terms.minSamples);
+        }
+        if (!state.windowCovered) {
+            revert ObservationWindowNotCovered(state.previousBlock, windowStart);
+        }
+        if (block.number - state.newestBlock > terms.maxObservationGapBlocks) {
+            revert ObservationTooOld(
+                state.newestBlock, block.number, terms.maxObservationGapBlocks
+            );
+        }
 
         // Settle on whichever covered event that actually held implies the largest loss, rather
         // than on a fixed order of severity. Since a deficit now pays in proportion to its size, a
@@ -267,16 +340,16 @@ contract ClaimResolver is AccessControl {
         Trigger trigger = Trigger.None;
         uint256 payout = 0;
 
-        if (deficitHeld) {
+        if (state.deficitHeld) {
             trigger = Trigger.ReserveDeficit;
-            payout = (coverAmount * minDeficitBps) / 10_000;
+            payout = (coverAmount * state.minDeficitBps) / 10_000;
             if (payout > coverAmount) payout = coverAmount;
         }
-        if (illiquidityHeld && coverAmount > payout) {
+        if (state.illiquidityHeld && coverAmount > payout) {
             trigger = Trigger.RedemptionFailure;
             payout = coverAmount;
         }
-        if (depegHeld) {
+        if (state.depegHeld) {
             uint256 depeg = _depegPayout(terms, coverAmount);
             if (depeg > payout) {
                 trigger = Trigger.OracleFailure;
@@ -334,8 +407,11 @@ contract ClaimResolver is AccessControl {
         uint256 worst = PEG_PRICE;
         for (uint256 i = obs.length; i > 0; i--) {
             Observation storage o = obs[i - 1];
-            if (o.blockNumber < windowStart) break;
+            bool boundarySample = o.blockNumber <= windowStart;
+            if (o.blockNumber < windowStart
+                && windowStart - o.blockNumber > terms.maxObservationGapBlocks) break;
             if (o.price < worst) worst = o.price;
+            if (boundarySample) break;
         }
 
         if (worst >= PEG_PRICE) return 0;

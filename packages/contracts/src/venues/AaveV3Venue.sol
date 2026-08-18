@@ -111,10 +111,13 @@ contract AaveV3Venue is IYieldVenue, AccessControl {
     }
 
     /// @inheritdoc IYieldVenue
-    /// @dev Three pass-through reads of live Aave state. Nothing is cached, nothing is supplied by
-    ///      the caller, and there is deliberately no counterpart anywhere in this contract that can
-    ///      write any of the three — see the no-deficit-surface note above.
-    function observeReserve(address reserve, address aToken_)
+    /// @dev Three pass-through reads of live Aave state. The `aToken_` argument is retained for
+    ///      interface compatibility but deliberately ignored: liquidity and the denominator must
+    ///      come from this venue's immutable aToken, not from an arbitrary address chosen by the
+    ///      permissionless observer. Nothing is cached, and there is deliberately no counterpart
+    ///      anywhere in this contract that can write any of the three — see the no-deficit-surface
+    ///      note above.
+    function observeReserve(address reserve, address)
         external
         view
         returns (
@@ -127,11 +130,11 @@ contract AaveV3Venue is IYieldVenue, AccessControl {
         return (
             aavePool.getReserveDeficit(reserve),
             oracle.getAssetPrice(reserve),
-            IERC20(reserve).balanceOf(aToken_),
+            IERC20(reserve).balanceOf(address(aToken)),
             // The aToken's total supply is everything supplied to the reserve, so it is the
             // denominator the deficit has to be judged against. Read live: it rebases with
             // interest, and a stale denominator would misstate the share.
-            IERC20(aToken_).totalSupply()
+            aToken.totalSupply()
         );
     }
 

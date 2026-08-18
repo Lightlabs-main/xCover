@@ -21,6 +21,9 @@ import {PricingRegistry} from "./PricingRegistry.sol";
 ///      locked capital, and they receive vault shares. Cover is a property of the position rather
 ///      than a product bought alongside it.
 ///
+///      Vault shares are non-transferable in this build. The policy NFT and the address-keyed
+///      position record must move atomically before a transferable position can be safe.
+///
 ///      **There is no uncovered deposit path.** The inherited ERC-4626 entrypoints have nowhere
 ///      to carry a quote, so `deposit` and `mint` revert and point at `depositCovered`. If the
 ///      agent declined, or the quote went stale, or the pool lacks capacity, the whole
@@ -80,6 +83,8 @@ contract xCoverVault is ERC20, AccessControl {
     error PositionAlreadyOpen(address owner);
     /// @notice This address holds no open position.
     error NoOpenPosition(address owner);
+    /// @notice Direct share transfers are disabled because the policy and position are address-keyed.
+    error PositionTransfersDisabled();
     /// @notice Zero-valued calls are rejected rather than silently succeeding.
     error ZeroAmount();
     /// @notice The quote was priced for a different amount than is being deposited.
@@ -141,6 +146,14 @@ contract xCoverVault is ERC20, AccessControl {
 
     function redeem(uint256, address, address) external pure returns (uint256) {
         revert UseExit();
+    }
+
+    /// @dev Minting and burning remain available to `depositCovered` and `exit`. A live share
+    /// transfer would desynchronize the address-keyed position from the policy NFT, so this build
+    /// deliberately requires a future atomic transfer design before allowing it.
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) revert PositionTransfersDisabled();
+        super._update(from, to, value);
     }
 
     // --- the one transaction ----------------------------------------------------------------

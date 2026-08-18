@@ -128,12 +128,12 @@ bench/                            benchmark corpus and threshold derivation
 
 ## State, briefly
 
-All five §4 contracts are written; 109 tests pass; **nothing is deployed**. The
-fork payout test runs the full path against live Aave. Next up is deployment
-scripts and the testnet deployment (chain 1952), which must provably precede
-mainnet. `HANDOFF.md` §4 has the role-wiring table and the design decisions that
-are load-bearing; §5 lists traps already paid for once — read both before writing
-contract or test code.
+All five §4 contracts are written; 139 local tests pass; the corrected contract
+set is deployed and lifecycle-proven on X Layer testnet (chain 1952). Mainnet
+remains undeployed. Next up is the pricing agent, benchmark corpus, and then the
+funded mainnet deployment. `HANDOFF.md` §4 has the role-wiring table and the
+design decisions that are load-bearing; §5 lists traps already paid for once —
+read both before writing contract or test code.
 
 ## Two testing rules learned here the hard way
 

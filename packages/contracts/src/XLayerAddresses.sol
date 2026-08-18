@@ -27,7 +27,9 @@ library XLayerAddresses {
     address internal constant USDT = 0x779Ded0c9e1022225f8E0630b35a9b54bE713736;
     address internal constant USDT_A_TOKEN = 0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297;
     address internal constant USDT_V_TOKEN = 0x04837866D0cb0cd2D8F60fBCa83B4a24b3a7c8ac;
-    address internal constant USDT_ORACLE = 0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3;
+    /// @dev Chainlink-style capped USDT/USD feed, not Aave's `IAaveOracle`. Keep named separately
+    ///      so deployment code cannot mistake it for the aggregate oracle above.
+    address internal constant USDT_PRICE_FEED = 0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3;
 
     uint8 internal constant USDT_DECIMALS = 6;
 

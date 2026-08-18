@@ -49,6 +49,7 @@ abstract contract DeployBase is Script {
         uint256 dailyCoverCap;
         uint64 windowBlocks;
         uint64 minSamples;
+        uint64 maxObservationGapBlocks;
         uint256 depegLowerBound;
         uint256 liquidityFloorBps;
         uint256 deficitFloorBps;
@@ -111,6 +112,7 @@ abstract contract DeployBase is Script {
             aToken: _aToken(),
             windowBlocks: p.windowBlocks,
             minSamples: p.minSamples,
+            maxObservationGapBlocks: p.maxObservationGapBlocks,
             depegLowerBound: p.depegLowerBound,
             liquidityFloorBps: p.liquidityFloorBps,
             deficitFloorBps: p.deficitFloorBps
@@ -150,6 +152,7 @@ abstract contract DeployBase is Script {
         console2.log("aToken          ", terms.aToken);
         console2.log("windowBlocks    ", terms.windowBlocks);
         console2.log("minSamples      ", terms.minSamples);
+        console2.log("maxSampleGap    ", terms.maxObservationGapBlocks);
         console2.log("depegLowerBound ", terms.depegLowerBound);
         console2.log("liquidityFloorBps", terms.liquidityFloorBps);
         console2.log("deficitFloorBps ", terms.deficitFloorBps);

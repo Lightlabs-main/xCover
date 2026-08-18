@@ -55,8 +55,11 @@ contract LifecycleTestnet is Script {
     // *would* reject them is the point of the hash; this is the honest way to satisfy it.
     uint64 internal constant WINDOW_BLOCKS = 120;
     uint64 internal constant MIN_SAMPLES = 5;
+    uint64 internal constant MAX_OBSERVATION_GAP_BLOCKS = 30;
     uint256 internal constant DEPEG_LOWER_BOUND = 97_000_000;
-    uint256 internal constant LIQUIDITY_FLOOR_BPS = 10_000;
+    // Must match DeployTestnet: 50% keeps the induced 25% deficit from being masked by the
+    // custody venue's position-sized liquidity drop.
+    uint256 internal constant LIQUIDITY_FLOOR_BPS = 5_000;
     uint256 internal constant DEFICIT_FLOOR_BPS = 50;
 
     function _load() internal view returns (Addrs memory a) {
@@ -78,6 +81,7 @@ contract LifecycleTestnet is Script {
             aToken: address(0),
             windowBlocks: WINDOW_BLOCKS,
             minSamples: MIN_SAMPLES,
+            maxObservationGapBlocks: MAX_OBSERVATION_GAP_BLOCKS,
             depegLowerBound: DEPEG_LOWER_BOUND,
             liquidityFloorBps: LIQUIDITY_FLOOR_BPS,
             deficitFloorBps: DEFICIT_FLOOR_BPS

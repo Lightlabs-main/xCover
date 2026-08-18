@@ -59,6 +59,11 @@ interface ICoverPool {
     /// @notice Zero-valued calls are rejected rather than silently succeeding.
     error ZeroAmount();
 
+    /// @notice The pool was fully paid out while legacy provider shares still exist. Those shares
+    ///        must be burned before a new capital epoch can start, or the new depositor would be
+    ///        given an incorrect fraction of the pool.
+    error CapitalFullyPaidOut();
+
     /// @notice Total assets held on behalf of capital providers, in the asset's own decimals.
     function capital() external view returns (uint256);
 

@@ -1,15 +1,34 @@
 {
-  "asset": "0x13Ab916B4a97E5F4c5F3C85296db1bfC1dd9C0c0",
-  "blockNumber": 38540175,
+  "asset": "0x13Ba8C8B4D50CCA1Ad268C5f9c74244F42C3A894",
+  "blockNumber": 38581492,
   "chainId": 1952,
-  "claimResolver": "0x2c92c3d3056f72Ec474395eC2212455EA44e4baa",
-  "coverPolicy": "0x659cBc26676C107EA1D8FC716B39b322c6e6776f",
-  "coverPool": "0x7c0039a4a394D9d4DB81Db8c375e8fD42cDaF991",
+  "claimResolver": "0xdb3cf87E5C00C635D9c24003CbCbAE99fF69a3B3",
+  "coverPolicy": "0xF2426878788a41ce6119Fd42dcBc1c01a8b10243",
+  "coverPool": "0x5Ef5F50391ecb540Eb6e44E260D6E9F102d752ff",
+  "deployerAddress": "0xf3c2991bca976c9ecc55c1c1eb8e2fd6e21baae8",
+  "deploymentTxHashes": {
+    "asset": "0x4ecb31c7a556a75c8c4e30dd7c8eea0d659e89d03027ae6a3e7b1b1738bb0146",
+    "claimResolver": "0xbe9448b83cb8d1dc4c60f1782b66cbafa529b1ed2fc94e1a12bb90302a7db2db",
+    "coverPolicy": "0xaa55816178cf854157d0a7e2c024d6535452fbf7c629ea492447103c874dc2d4",
+    "coverPool": "0x5273403f1a6b3d9d3e5b81ab18ebee494ca4e2bea480c6dd5a675d5a2b4be8c4",
+    "pricingRegistry": "0x80131440ad53ef90423200a3095b909e115357e7b5cc92187a9a16520759d1e6",
+    "venue": "0x87ccb3ee403bf7a2b4a8c2ea0ed78c26bd998bcc0364f77c46b81c86d42575f6",
+    "xCoverVault": "0x952daeeefc02c09e34e42a40660ac5c0fbd2cd15f6cac34e6f8d390706a9d1d9"
+  },
+  "explorer": {
+    "asset": "https://www.oklink.com/x-layer-testnet/address/0x13Ba8C8B4D50CCA1Ad268C5f9c74244F42C3A894",
+    "claimResolver": "https://www.oklink.com/x-layer-testnet/address/0xdb3cf87E5C00C635D9c24003CbCbAE99fF69a3B3",
+    "coverPolicy": "https://www.oklink.com/x-layer-testnet/address/0xF2426878788a41ce6119Fd42dcBc1c01a8b10243",
+    "coverPool": "https://www.oklink.com/x-layer-testnet/address/0x5Ef5F50391ecb540Eb6e44E260D6E9F102d752ff",
+    "pricingRegistry": "https://www.oklink.com/x-layer-testnet/address/0x06299277B523300AeD09581A7311C04346eC4F0a",
+    "venue": "https://www.oklink.com/x-layer-testnet/address/0x60F9C843298F0Ef99Df4CE3C611D310aa4Fdbe73",
+    "xCoverVault": "https://www.oklink.com/x-layer-testnet/address/0x628402879de0e7E1Cd4f5B24EB0652FbFc1c2100"
+  },
   "hasYieldSource": false,
-  "pricingRegistry": "0xbD3B482E7b28F376c594464e2E557415e8bA15c2",
-  "termsHash": "0x1af6d4fda2f41d995d21e2908a550240d922668f845414619276bc4784bcc60e",
-  "timestamp": 1786999012,
-  "venue": "0x1A211A4C13E57612925f2C54D565AA93986BE7f0",
+  "pricingRegistry": "0x06299277B523300AeD09581A7311C04346eC4F0a",
+  "termsHash": "0x3011f484e44ffe494015493b9f6ddbc04e526de0fc9f3b86ae99d65d9e47475f",
+  "timestamp": 1787040329,
+  "venue": "0x60F9C843298F0Ef99Df4CE3C611D310aa4Fdbe73",
   "venueName": "custody-only/xlayer-testnet",
-  "xCoverVault": "0x3f8Bbf084C6ba4cEf33Fc6EEB7C24CCc0C0A40e0"
+  "xCoverVault": "0x628402879de0e7E1Cd4f5B24EB0652FbFc1c2100"
 }

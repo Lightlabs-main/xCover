@@ -221,7 +221,7 @@ Launch covering **USDT only.**
 | `USDT_UNDERLYING` | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` (6 decimals) |
 | `USDT_A_TOKEN` | `0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297` |
 | `USDT_V_TOKEN` | `0x04837866D0cb0cd2D8F60fBCa83B4a24b3a7c8ac` |
-| `USDT_ORACLE` | `0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3` |
+| `USDT_PRICE_FEED` (Chainlink-style feed; not `IAaveOracle`) | `0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3` |
 
 Rationale for USDT-only at launch: it is the deepest stable reserve, the payout
 asset and the covered asset are the same denomination (no FX exposure in the
@@ -484,6 +484,12 @@ selection control.
 **Per-venue daily cap.** New cover written per reserve per day is capped. Same
 reason. Same treatment.
 
+**Position ownership.** Policy NFTs and vault shares are non-transferable in this
+build. `xCoverVault.positions` is keyed by address, so allowing either token to
+move independently would strand exit rights or let the old address cancel the
+new holder's position. Transferability requires a single atomic transfer path
+for both records and is deliberately deferred.
+
 **Premium accrues per block** and streams from the position's yield. There is no
 recurring payment for the user to forget.
 
@@ -532,8 +538,10 @@ status. If triggered, the payout is computed and the policy becomes `Claimable`;
 anyone may then call `claim` on behalf of the holder.
 
 **Sampling matters.** A single-block read is manipulable via flash loan. Sample
-over N blocks and require the condition to hold throughout. Document N in the
-terms.
+over N blocks, require the observations to span the full window, require the
+newest observation to be fresh, and reject any gap larger than the
+`maxObservationGapBlocks` fixed in the terms. The guarantee is bounded-cadence
+sampled evidence, not an unobserved claim that every block was inspected.
 
 **No admin override.** There is no function letting anyone deny a valid claim or
 approve an invalid one. Write a test asserting no privileged role can alter

@@ -375,22 +375,15 @@ contract CoverPolicyTest is Test {
         policy.cancel(id);
     }
 
-    /// @dev The policy is a transferable position; the obligation follows the token.
-    function test_PolicyIsTransferableAndPaysTheNewHolder() public {
+    /// @dev Transfers are disabled until policy ownership and the vault's address-keyed position
+    /// can move atomically. A partial transfer would strand exit rights or change who can cancel.
+    function test_PolicyTransfersAreDisabled() public {
         uint256 id = _mint(10_000e6);
         address buyer = address(0xBEEF);
 
         vm.prank(holder);
+        vm.expectRevert(CoverPolicy.PositionTransfersDisabled.selector);
         policy.transferFrom(holder, buyer, id);
-        assertEq(policy.ownerOf(id), buyer);
-
-        vm.roll(policy.activeFromBlock(id));
-        vm.startPrank(resolver);
-        policy.markClaimable(id);
-        pool.payClaim(id, policy.ownerOf(id), 10_000e6);
-        policy.markPaid(id, 10_000e6);
-        vm.stopPrank();
-
-        assertEq(asset.balanceOf(buyer), 10_000e6);
+        assertEq(policy.ownerOf(id), holder);
     }
 }

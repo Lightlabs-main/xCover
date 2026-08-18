@@ -99,15 +99,17 @@ contract CoverPool is ICoverPool, AccessControl, Pausable {
     ///      the balance-backs-capital property.
     function depositCapital(uint256 assets) external returns (uint256 shares) {
         if (assets == 0) revert ZeroAmount();
+        // A full claim payout can reduce capital to zero without burning provider shares. Do not
+        // let a new depositor share a fresh capital epoch with those stale zero-value shares.
+        if (capital == 0 && totalShares != 0) revert CapitalFullyPaidOut();
 
         uint256 before = asset.balanceOf(address(this));
         asset.safeTransferFrom(msg.sender, address(this), assets);
         uint256 received = asset.balanceOf(address(this)) - before;
         if (received == 0) revert ZeroAmount();
 
-        // First deposit, or a pool whose capital was fully paid out in claims: price 1:1 rather
-        // than dividing by zero.
-        shares = (totalShares == 0 || capital == 0) ? received : Math.mulDiv(received, totalShares, capital);
+        // The only zero-capital case that reaches here is a genuinely empty share ledger.
+        shares = totalShares == 0 ? received : Math.mulDiv(received, totalShares, capital);
         if (shares == 0) revert ZeroAmount();
 
         capital += received;

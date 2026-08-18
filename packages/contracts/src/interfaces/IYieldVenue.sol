@@ -55,8 +55,9 @@ interface IYieldVenue {
     ///      says, which is the property the resolver's manipulation resistance rests on.
     ///
     /// @param reserve The covered asset.
-    /// @param aToken The interest-bearing claim on it, whose underlying balance is the redeemable
-    ///        liquidity. Ignored by venues that hold the underlying directly.
+    /// @param aToken Legacy compatibility argument. Production venues must use their configured
+    ///        liquidity token, not an address supplied by the permissionless observer. It is ignored
+    ///        by `AaveV3Venue` and by venues that hold the underlying directly.
     /// @return deficit Unbacked obligations the venue records against `reserve`.
     /// @return price The venue's oracle price for `reserve`, 8 decimals, `1e8` at peg.
     /// @return redeemableLiquidity Underlying actually available to redeem right now.

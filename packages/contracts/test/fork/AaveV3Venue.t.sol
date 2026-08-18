@@ -23,7 +23,7 @@ contract AaveV3VenueForkTest is Test {
     IERC20 internal usdt = IERC20(XLayerAddresses.USDT);
     IERC20 internal aUsdt = IERC20(XLayerAddresses.USDT_A_TOKEN);
     IAaveV3Pool internal aavePool = IAaveV3Pool(XLayerAddresses.POOL);
-    IAaveOracle internal oracle = IAaveOracle(XLayerAddresses.USDT_ORACLE);
+    IAaveOracle internal oracle = IAaveOracle(XLayerAddresses.ORACLE);
 
     address internal vault = makeAddr("vault");
     address internal user = makeAddr("user");
@@ -114,6 +114,26 @@ contract AaveV3VenueForkTest is Test {
         uint256 deficit = venue.reserveDeficit();
         emit log_named_uint("live USDT reserve deficit", deficit);
         assertEq(deficit, aavePool.getReserveDeficit(XLayerAddresses.USDT));
+    }
+
+    /// @notice All four observation values come from the configured live Aave dependencies.
+    /// @dev The bogus second argument is intentional. A permissionless recorder may provide it,
+    ///      but it must not be able to substitute another ERC-20 and manufacture a liquidity
+    ///      reading. This also catches wiring the Chainlink-style USDT feed as `IAaveOracle`.
+    function test_ObserveReserveUsesConfiguredLiveSources() public view onlyForked {
+        address bogusAToken = address(0xBEEF);
+
+        (
+            uint256 deficit,
+            uint256 price,
+            uint256 redeemableLiquidity,
+            uint256 totalSupplied
+        ) = venue.observeReserve(address(usdt), bogusAToken);
+
+        assertEq(deficit, aavePool.getReserveDeficit(address(usdt)));
+        assertEq(price, oracle.getAssetPrice(address(usdt)));
+        assertEq(redeemableLiquidity, usdt.balanceOf(address(aUsdt)));
+        assertEq(totalSupplied, aUsdt.totalSupply());
     }
 
     /// @notice The venue exposes no surface that could induce or alter a reserve deficit.

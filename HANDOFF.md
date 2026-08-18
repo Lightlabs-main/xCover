@@ -10,7 +10,40 @@ what you want built. Read `CLAUDE.md` first if you are a human picking this up
 cold; it is the short version of this document.
 
 Repo: `https://github.com/Lightlabs-main/xCover`
-Last updated: 17 August 2026 — 136 tests passing; testnet redeployed at block 38540175 with the corrected deficit trigger; mainnet not deployed
+Last updated: 18 August 2026 — 139 local tests passing; corrected source deployed and lifecycle-proven on X Layer testnet at block 38581492; mainnet not deployed
+
+## Current checkpoint — resume here
+
+The current working tree contains the correctness batch that has now been
+broadcast and exercised end to end on X Layer testnet. The mainnet deployment
+remains intentionally absent.
+
+Done in source and tests:
+
+- Mainnet `DeployMainnet` now binds `AaveV3Venue` to Aave's aggregate oracle,
+  not the Chainlink-style USDT feed.
+- `AaveV3Venue` ignores the caller-supplied aToken and reads liquidity and total
+  supply from its immutable configured aToken. The live fork test passes with a
+  bogus aToken address.
+- Policy NFTs and vault shares are non-transferable. This is the safe current
+  ownership model because `xCoverVault.positions` is address-keyed; transferability
+  must wait for an atomic policy-plus-position transfer design.
+- `ClaimResolver` now requires samples to cover the window, enforces a maximum
+  observation gap and requires a fresh latest sample. Testnet is configured for a
+  30-block maximum gap; mainnet for 60 blocks.
+- `CoverPool` rejects a new capital epoch while zero-value legacy provider shares
+  remain after a full payout.
+- Testnet source parameters now use `liquidityFloorBps: 5000`, so the 25% demo
+  deficit is not masked by the custody venue's redemption-failure trigger.
+
+Verification completed:
+
+- `forge build --force` passes.
+- Full Foundry suite passes: **139 tests, 0 failures**.
+- Live X Layer mainnet fork passes: **10 tests, 0 failures**.
+
+Not yet done: build the pricing agent and benchmark corpus, review the remaining
+reasoned parameters, fund and deploy mainnet, and finish the presentation layer.
 
 ---
 
@@ -171,7 +204,7 @@ Mirrored in `packages/contracts/src/XLayerAddresses.sol`.
 | `USDT` (6 dp) | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` |
 | `USDT_A_TOKEN` | `0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297` |
 | `USDT_V_TOKEN` | `0x04837866D0cb0cd2D8F60fBCa83B4a24b3a7c8ac` |
-| `USDT_ORACLE` | `0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3` |
+| `USDT_PRICE_FEED` (Chainlink-style feed; not `IAaveOracle`) | `0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3` |
 
 Launch covers **USDT only** — deepest stable reserve, payout asset and covered
 asset share a denomination so there is no FX exposure in the claim, and one
@@ -181,9 +214,10 @@ reserve keeps the correlation surface small enough to reason about honestly.
 
 ## 4. What exists right now
 
-All five §4 contracts are written, with **136 tests passing** — 127 off-fork and 9
-against live X Layer mainnet. **X Layer testnet is deployed** (block 38540175);
-mainnet is not.
+All five §4 contracts are written, with **139 tests passing** — 129 off-fork and 10
+against live X Layer mainnet. The corrected X Layer testnet deployment is at block
+38581492 and its lifecycle has paid the intended pro-rata deficit claim; mainnet is
+not deployed.
 
 ```
 README.md                        public-facing; states build status and limitations
@@ -209,8 +243,8 @@ packages/contracts/
   script/VerifyIntegration.s.sol passing against live mainnet
 ```
 
-**Not written yet:** the pricing agent, the benchmark corpus,
-the frontend. No deployments. X account not created.
+**Not written yet:** the pricing agent, the benchmark corpus, and the frontend.
+Mainnet is not deployed. X account not created.
 
 ### How the contracts fit together
 
@@ -313,15 +347,13 @@ invariant_CallSummary -vv`) before believing a green run.
 succeeded", not "never attempted". Early `return`s do *not* roll back, so put the
 counter increment after the early returns or it overstates activity.
 
-**The keeper interval must divide the sampling window into comfortably more slices
-than `minSamples`.** Found during the live testnet payout: observations spaced ~28
-blocks apart put only about five inside a 120-block window, so the evaluation had to
-be preceded by fresh observations or it would have reverted `InsufficientSamples` on
-a completely valid claim. The failure mode is a valid claim that cannot be proven,
-which is worse than it sounds — it looks like the resolver rejecting the claim.
-Mainnet's 1,800-block window with `minSamples: 30` needs an observation at least
-every 60 blocks and should target noticeably more often. Size the keeper cadence
-against the window, not against the RPC limit.
+**The resolver now enforces keeper cadence, not just sample count.** Found during
+the live testnet payout: observations spaced ~28 blocks apart put only about five
+inside a 120-block window. The corrected terms require samples to span the window,
+keep every unseen gap within the configured maximum, and keep the newest sample
+fresh. Testnet uses a 30-block maximum gap; mainnet uses 60 blocks and should target
+noticeably more often. Size the keeper cadence against the window, not against the
+RPC limit.
 
 **Writing to a proxy's storage will brick it.** The first slot any call on the
 Aave Pool reads is the ERC-1967 implementation pointer. The fork test's slot
@@ -359,76 +391,54 @@ is not evidence.
 
 ## 6. What is left, in order
 
-Three days to the 20 August submission target. Everything below is unstarted
-unless it says otherwise. Each item says what "done" means, so it can be picked
-up without reconstructing the reasoning first.
+The code correctness blockers found in review are now resolved in the working
+tree. The remaining work is integration, evidence, and the required deployment
+sequence. Do not use the historical testnet addresses for the competition demo;
+the corrected source changes the terms hash and transfer behaviour.
 
-### 6.1 Blocking the submission
+### 6.1 Corrected testnet deployment and lifecycle — complete
 
-**1. The pricing agent.** The single largest missing piece, and the one the
-submission is actually about — the repository currently has no agent in it at
-all. `PricingRegistry` already accepts exactly what it must produce: an EIP-712
-`Decision` signed by a `PRICER_ROLE` key. The shape is fixed and deployed, so
-this is additive work against a stable interface, not a design negotiation.
+The corrected set was broadcast on 18 August 2026 at block **38581492**. The
+record in `deployments/xlayer-testnet.json` now carries all seven creation
+transaction hashes, the explorer links, and terms hash
+`0x3011f484e44ffe494015493b9f6ddbc04e526de0fc9f3b86ae99d65d9e47475f`.
 
-- Pipeline is read → retrieve → assess → compute → gate (SPEC §5).
-- The signing key **never needs gas**: decisions are signed off-chain and may be
-  submitted by anyone. Do not build a funded hot wallet for it.
-- Serve the canonical decision JSON at `GET /decision/:hash` (RFC 8785 canonical
-  form) so the on-chain `decisionHash` is independently checkable by a judge.
-- `DECLINE_TO_QUOTE` is a first-class output, not an error path. The registry
-  records refusals on the same footing as quotes and the testnet run has already
-  exercised that path on chain. **Never widen a quote to avoid refusing.**
-- `ANTHROPIC_API_KEY` is still empty in `.env`. Needed before this can run.
-- Done when: the agent produces a signed decision that `xCoverVault` consumes in
-  a real transaction on testnet, and a refusal that it correctly rejects.
+The live lifecycle then completed against those addresses: policy #1 opened with
+100,000 tUSDT capital and 10,000 tUSDT cover, a signed refusal was recorded, the
+venue wrote off 2,500 tUSDT, five observations were mined at 20-block gaps, and
+evaluation selected trigger **1 = ReserveDeficit** with a 2,500 tUSDT payout.
+Settlement paid the holder, leaving pool capital at 97,500 tUSDT and outstanding
+cover at zero. Direct post-settlement reads confirmed policy state `Paid` (4),
+venue balance 7,500 tUSDT against 10,000 tUSDT deposited, and the 2,500 tUSDT
+deficit.
 
-**2. Benchmark corpus and the rest of `bench/threshold-derivation.md`.**
-Long-lead, and it gates the agent's refusal threshold. The file now exists and
-covers the two derived thresholds (deficit floor, depeg bound); the corpus itself
-is not started. Contingency order says reduce its size if time is short — never
-drop it.
+The first lifecycle attempts exposed the public RPC latency problem and were not
+used as evidence: their observation gaps exceeded 30 blocks. The final run used
+raw signed transactions through the official `/terigon` testnet endpoint and
+verified every receipt and block gap directly.
 
-**3. Mainnet deployment (chain 196).** `DeployMainnet.s.sol` refuses to run
-without the testnet record, so the eligibility order cannot be skipped by
-accident. Blocked on funding: the deployer's mainnet balance is zero. Working
-minimum is ~100 USDT pool capital, ~50 USDT covered deposit (same wallet is
-fine), plus OKB for gas. Re-run `VerifyIntegration.s.sol` immediately before
-deploying — an address book entry can go stale.
+### 6.2 Submission blockers after testnet
 
-**4. Review the provisional parameters before mainnet.** `waitingPeriodBlocks`,
-`windowBlocks`, `minSamples` and `dailyCoverCap` are reasoned defaults, flagged
-as such at their call sites and in `docs/deployments.md`. Only the deficit floor
-and the depeg bound are evidence-derived. Size the keeper cadence against the
-window, not against the RPC limit — see the trap in §5.
+**Pricing agent — not written.** Build the read → retrieve → assess → compute →
+gate pipeline from SPEC §5. It must produce EIP-712 `Decision` signatures for
+`PricingRegistry`, serve canonical decision JSON at `GET /decision/:hash`, and
+treat `DECLINE_TO_QUOTE` as a first-class result. The signing key needs no gas.
+Done means one agent-signed quote is consumed by a real testnet deposit and one
+agent-signed refusal is rejected on the same path.
 
-**5. Frontend**, then README figures, demo video, X account and the first build
-post. The README must state the book size plainly rather than implying scale.
+**Benchmark corpus — not started.** Complete the corpus behind
+`bench/threshold-derivation.md`. The 50 bp deficit floor and $0.97 depeg bound
+are documented; the rest of the deployment parameters remain reasoned defaults
+and must be reviewed before mainnet.
 
-### 6.2 Open decision, recorded rather than worked around
+**Mainnet deployment — not done.** First rerun `VerifyIntegration.s.sol` against
+chain 196, fund the deployer with the minimum real capital and gas, then run
+`DeployMainnet.s.sol` only after the corrected testnet record exists. Verify the
+new mainnet deployment directly and commit its record. The deployer mainnet
+balance was previously zero.
 
-**The deficit trigger is unreachable on the testnet deployment.** Verified on
-chain during the 17 August redeployment, and written up in full in
-`docs/deployments.md`.
-
-`TestnetVenue` custodies exactly one position, so its token balance equals the
-cover written against it. Writing off any amount therefore drops redeemable
-liquidity below the cover, which is the redemption-failure condition at
-`liquidityFloorBps: 10000`. Triggers settle on whichever held condition implies
-the largest loss, so the full-cover redemption failure outranks the deficit's
-pro-rata share for **any** write-off size.
-
-Not a contract defect, and it does not reach mainnet: there the aToken holds
-50.2M USDT against cover measured in tens of thousands, so that floor only trips
-in a genuine liquidity crisis. The pro-rata deficit behaviour is proven by twelve
-tests, two against the live Aave Pool on a mainnet fork.
-
-But it means **the testnet deployment demonstrates the redemption path, not the
-deficit path** — and the deficit path is what the redeployment existed to ship.
-If a judge is meant to watch it live, lower `liquidityFloorBps` on testnet only
-to around 5,000 bp. That costs one more redeployment and another `termsHash`
-(~0.0003 OKB, ~15 minutes). It is a policy-parameter change affecting payouts,
-so it is the owner's call and is deliberately left undecided here.
+**Presentation layer — not started.** Frontend, benchmark figures, demo video,
+X account and the first build post remain after the chain evidence is complete.
 
 ### 6.3 Testing debt worth knowing about
 
@@ -441,8 +451,9 @@ passed while proving nothing:
   payout cap had no test at all because it was assumed covered by the solvency
   suites, which cannot express it — over-paying is theft, not insolvency.
 
-Every absence-asserting test in the repository was re-checked by mutation on
-17 August and all now hold. Anything added after that date has not been.
+The older absence-asserting tests were re-checked by mutation on 17 August. The
+new ownership and sampling tests added in the current session pass normally but
+have not yet had an independent mutation run.
 
 ### Definition-of-done items already satisfied
 
@@ -456,20 +467,23 @@ Every absence-asserting test in the repository was re-checked by mutation on
 - Reserve deficit judged as a share of the reserve, paid pro-rata above a 50 bp
   floor — twelve tests, two against the live Aave Pool, all mutation-checked
 - `CoverPool`'s own guards asserted directly in `test/unit/CoverPool.t.sol`
-- Testnet deployed, wired and lifecycle-verified by reading the chain
+- Oracle wiring and immutable-aToken observation source verified on a live fork
+- Policy and vault-share transfer desynchronization closed by rejecting direct transfers
+- Observation span, freshness and maximum-gap checks covered by unit and live-fork tests
+- Zero-capital provider-share epoch regression covered directly
 
 Still open from §11: config loader environment pairing (belongs with the agent),
 mainnet deployment, real capital, agent, benchmark, frontend, X account.
 
 ### Deployed, and the keys behind it
 
-**X Layer testnet (1952) is deployed** at block 38540175, carrying the corrected
-deficit trigger — addresses, tx hashes and explorer links in
-`deployments/xlayer-testnet.json`, explained in `docs/deployments.md`. The
-superseded first deployment is preserved at
-`deployments/xlayer-testnet.superseded-38522841.json`; do not use those addresses.
-Mainnet is not deployed. `DeployMainnet.s.sol` refuses to run without the testnet record present, so
-the eligibility order cannot be skipped by accident.
+**X Layer testnet (1952) has the corrected deployment** at block 38581492. Use
+the addresses and transaction hashes in `deployments/xlayer-testnet.json` for
+competition evidence; the older deployment at block 38540175 remains historical
+only. Its terms hash is `0x3011f484e44ffe494015493b9f6ddbc04e526de0fc9f3b86ae99d65d9e47475f`.
+Mainnet is not deployed.
+`DeployMainnet.s.sol` refuses to run without a testnet record, but the record must
+be the corrected redeployment, not merely the historical file.
 
 | Key | Address | Holds |
 |---|---|---|
@@ -507,6 +521,7 @@ than on anything to do with the key. Copy `.env.example` and fill it in.
   only, never committed. It signs quotes and refusals and holds no other role; the
   deploy scripts refuse to run if it equals the deployer key.
 - `ANTHROPIC_API_KEY` for the pricing agent. Still needed.
+- Mainnet deployer funding and gas. Still needed before chain 196 deployment.
 
 ---
 

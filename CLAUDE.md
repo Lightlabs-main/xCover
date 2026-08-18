@@ -123,17 +123,19 @@ packages/contracts/               Foundry project, solc 0.8.28
   test/fork/                      against live X Layer mainnet
   script/VerifyIntegration.s.sol  asserts the integration still holds
 deployments/                      per-chain address records, committed evidence
+packages/agent/                   live reads, model-gated pricing, EIP-712 decisions, replay API
 bench/                            benchmark corpus and threshold derivation
 ```
 
 ## State, briefly
 
-All five §4 contracts are written; 139 local tests pass; the corrected contract
-set is deployed and lifecycle-proven on X Layer testnet (chain 1952). Mainnet
-remains undeployed. Next up is the pricing agent, benchmark corpus, and then the
-funded mainnet deployment. `HANDOFF.md` §4 has the role-wiring table and the
-design decisions that are load-bearing; §5 lists traps already paid for once —
-read both before writing contract or test code.
+All five §4 contracts are written; 139 local contract tests pass; the corrected
+contract set is deployed and lifecycle-proven on X Layer testnet (chain 1952).
+The pricing agent is scaffolded and unit-tested; its benchmark thresholds and
+model credential are intentionally still unset. Mainnet remains undeployed.
+`HANDOFF.md` §4 has the role-wiring table and the design decisions that are
+load-bearing; §5 lists traps already paid for once — read both before writing
+contract or agent code.
 
 ## Two testing rules learned here the hard way
 

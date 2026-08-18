@@ -419,12 +419,17 @@ verified every receipt and block gap directly.
 
 ### 6.2 Submission blockers after testnet
 
-**Pricing agent — not written.** Build the read → retrieve → assess → compute →
-gate pipeline from SPEC §5. It must produce EIP-712 `Decision` signatures for
-`PricingRegistry`, serve canonical decision JSON at `GET /decision/:hash`, and
-treat `DECLINE_TO_QUOTE` as a first-class result. The signing key needs no gas.
-Done means one agent-signed quote is consumed by a real testnet deposit and one
-agent-signed refusal is rejected on the same path.
+**Pricing agent — scaffolded, live proof still open.** `packages/agent` now
+implements the read → retrieve → assess → compute → gate pipeline from SPEC §5.
+It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
+serves canonical decision JSON at `GET /decision/:hash`, and treats
+`DECLINE_TO_QUOTE` as a first-class signed result. The signing key needs no gas.
+The benchmark-derived thresholds and `ANTHROPIC_API_KEY` are still unset, so no
+quote is claimed. Done still means one agent-signed quote is consumed by a real
+testnet deposit and one agent-signed refusal is rejected on the same path. The
+current corrected testnet venue has a non-zero residual deficit after the proven
+payout, so its live gate correctly refuses until a clean eligible venue state is
+available.
 
 **Benchmark corpus — not started.** Complete the corpus behind
 `bench/threshold-derivation.md`. The 50 bp deficit floor and $0.97 depeg bound

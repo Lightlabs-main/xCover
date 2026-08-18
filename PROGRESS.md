@@ -46,7 +46,7 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Deficit trigger | **Fixed and proven.** Pays pro-rata above a 50 bp floor. Unit, live-fork and corrected testnet lifecycle evidence cover dust rejection, both sides of the floor, pro-rata payout, smallest-share-in-window, empty reserve, rounding and trigger precedence. |
 | Threshold derivation | **Started.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound with their measurements, and names the parameters that are still reasoned defaults. |
-| Pricing agent | None written |
+| Pricing agent | Scaffolded in `packages/agent`; unit-tested signing, canonical replay hashing, two-pass gate/refusal path, and environment pairing. Live corpus/model run pending. |
 | Benchmark corpus | Not started |
 | Frontend | Not started |
 | X account | Not created |
@@ -89,8 +89,10 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Immediate next actions
 
-1. Build the pricing agent and prove one signed quote plus one signed refusal on
-   that corrected testnet deployment. `ANTHROPIC_API_KEY` is still empty in `.env`.
+1. Build the benchmark corpus and derive the pricing thresholds, then supply the
+   real model credential. The agent scaffold is ready, but the corrected testnet
+   venue now has a non-zero deficit from the completed payout lifecycle, so it
+   must refuse there until a clean eligible venue state is available.
 2. Build the benchmark corpus and review the remaining reasoned parameters.
 3. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
    verify roles/oracle/venue/terms on chain, and commit the mainnet record only

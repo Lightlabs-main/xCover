@@ -5,6 +5,7 @@ out/
 cache/
 .next/
 coverage/
+data/pricing-decisions/
 *.tsbuildinfo
 
 # Secrets. Deployer and pricer keys live only in .env.

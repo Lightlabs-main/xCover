@@ -10,6 +10,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:agent": "pnpm --filter @xcover/pricing-agent test",
     "test:contracts": "cd packages/contracts && forge test -vv",
     "verify:chain": "cd packages/contracts && forge script script/VerifyIntegration.s.sol --rpc-url $XLAYER_MAINNET_RPC"
   },

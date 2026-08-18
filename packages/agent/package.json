@@ -1,0 +1,22 @@
+{
+  "name": "@xcover/pricing-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Live, replayable xCover pricing decisions for X Layer",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/agent.test.ts",
+    "start": "node dist/src/main.js"
+  },
+  "dependencies": {
+    "viem": "^2.37.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

@@ -185,6 +185,15 @@ hash of its canonical JSON. The full decision is served publicly, so anyone can
 fetch it, canonicalise it (RFC 8785), hash it, and confirm it matches what the
 contract recorded.
 
+The first agent slice lives in [`packages/agent`](packages/agent). It reads the
+configured venue and `PricingRegistry` deployment, retrieves only cited corpus
+evidence, runs two differently framed model assessments, computes the rate in
+deterministic code, applies refusal gates, signs the EIP-712 decision, and serves
+`GET /decision/:hash`. It does not submit transactions or hold underwriting
+permissions. The benchmark-derived thresholds and Anthropic credential remain
+deliberately unset until the corpus is built; the agent refuses rather than
+inventing a price when either is unavailable.
+
 ### Adverse selection controls
 
 Both live in the contracts, not in the pricing model — a control the model can be
@@ -222,7 +231,7 @@ end against a real dependency on a real chain.
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
 | `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave**; bounded-cadence sampling now enforced |
 | `xCoverVault` | Written; covered deposit and every refusal path unit tested; direct share transfers disabled until atomic position transfer exists |
-| Pricing agent | Not written |
+| Pricing agent | Scaffolded and unit-tested; live corpus/model run still pending |
 | Benchmark corpus and calibration | Not started |
 | Frontend | Not started |
 | Deployment scripts | Written; shared wiring, mainnet gated on the testnet record existing |

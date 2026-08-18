@@ -2,7 +2,7 @@
 
 This service observes the configured X Layer deployment, retrieves matching
 entries from the committed benchmark corpus, asks Anthropic for two cited risk
-assessments, computes a per-block rate in deterministic code, applies refusal
+assessments (via the official SDK; `claude-opus-5`), computes a per-block rate in deterministic code, applies refusal
 gates, and signs a `PricingRegistry.Decision` with EIP-712.
 
 The service never submits a transaction and never receives a pool, vault, or

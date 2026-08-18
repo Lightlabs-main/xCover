@@ -336,6 +336,29 @@ vm.expectRevert(...); foo(this.helperThatCallsOut());   // helper eats the expec
 
 Hoist the inner read into a local first. This bit three separate times here.
 
+**A configured model id is not a working model id.** `.env` carried
+`claude-3-5-sonnet-20241022` and the docs recorded it as the current
+configuration, but the key returns HTTP 404 for it. Nothing failed loudly: the
+agent catches an assessment failure and refuses, so the only symptom was a
+refusal that looked principled. A refusal whose real cause is configuration is
+worse than a crash, because refusal is a correct outcome here and hides the
+fault. Check `GET /v1/models` before recording a model as configured, and run
+one assessment end to end.
+
+**The current models reject `temperature`.** The hand-rolled request body sent
+`temperature: 0` for determinism, which now returns
+`400 invalid_request_error`. Determinism in this system comes from the
+deterministic computation and the gate, plus committing the model output to the
+replayable decision document — never from sampling parameters. The call now
+goes through the official SDK so the request shape is not maintained by hand.
+
+**A citation validator can reject a correct assessment.** The prompt demanded an
+evidence id on every hazard factor, but several sound factors come from the live
+chain read, which had no id. The live model cited `live-chain-state` unprompted,
+the validator rejected the whole assessment, and the decision refused with
+`model_assessment_failed`. That id is now reserved and documented in the prompt;
+the corpus may not claim it.
+
 **An invariant suite can pass while proving nothing.** The first system invariant
 run reported green with `policies minted: 0` — the daily cap had been consumed
 once and never reset, so every later mint reverted and the invariants checked an
@@ -424,9 +447,14 @@ implements the read → retrieve → assess → compute → gate pipeline from S
 It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
 serves canonical decision JSON at `GET /decision/:hash`, and treats
 `DECLINE_TO_QUOTE` as a first-class signed result. The signing key needs no gas.
-The API key and `ANTHROPIC_MODEL=claude-3-5-sonnet-20241022` are now present in
-`.env`; the benchmark-derived thresholds are still unset, so no quote is
-claimed. The 50 bp deficit floor and
+The API key and `ANTHROPIC_MODEL=claude-opus-5` are present in `.env`, and the
+assessment call has now been exercised end to end against the live API: it
+returns a parsed, bounded, cited assessment. The previously configured
+`claude-3-5-sonnet-20241022` did not exist for this key and returned HTTP 404,
+so every live decision would have refused with `model_assessment_failed` — a
+refusal caused by configuration rather than by insufficient evidence. Verify a
+model id against `GET /v1/models` before recording it as configured. The
+benchmark-derived thresholds are still unset, so no quote is claimed. The 50 bp deficit floor and
 `97_000_000` depeg bound are spec-defined; the confidence, disagreement,
 uncertainty, oracle, capital-margin, premium-ceiling, and quote-TTL values are
 runtime/review parameters, not hidden spec defaults. The full provenance table

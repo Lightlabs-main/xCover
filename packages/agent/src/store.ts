@@ -10,9 +10,13 @@ export interface DecisionStore {
 export class FileDecisionStore implements DecisionStore {
   constructor(private readonly directory: string) {}
 
+  private fileFor(hash: Hex): string {
+    return join(this.directory, `${hash.slice(2).toLowerCase()}.json`);
+  }
+
   async put(hash: Hex, canonicalJson: string): Promise<void> {
     await mkdir(this.directory, { recursive: true });
-    await writeFile(join(this.directory, `${hash.slice(2)}.json`), canonicalJson, { encoding: "utf8", flag: "wx" }).catch(async (error: NodeJS.ErrnoException) => {
+    await writeFile(this.fileFor(hash), canonicalJson, { encoding: "utf8", flag: "wx" }).catch(async (error: NodeJS.ErrnoException) => {
       if (error.code !== "EEXIST") throw error;
       // A decision hash is content-addressed. Rewriting an existing path is unnecessary and
       // would make an accidental hash collision harder to notice.
@@ -21,7 +25,7 @@ export class FileDecisionStore implements DecisionStore {
 
   async get(hash: Hex): Promise<string | null> {
     try {
-      return await readFile(join(this.directory, `${hash.slice(2)}.json`), "utf8");
+      return await readFile(this.fileFor(hash), "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;

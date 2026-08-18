@@ -4,7 +4,7 @@ import {
   type Address,
   type PublicClient,
 } from "viem";
-import { xLayer } from "viem/chains";
+import { xLayer, xLayerTestnet } from "viem/chains";
 import { ConfigError } from "./config.js";
 import type { AgentConfig, ChainState } from "./types.js";
 
@@ -117,8 +117,11 @@ function asBigInt(value: unknown, label: string): bigint {
 }
 
 export function makePublicClient(config: AgentConfig): PublicClient {
+  // The chain descriptor must match the environment. Handing the client a mainnet chain while
+  // pointed at the testnet RPC is exactly the pairing mistake §1.2.5 exists to prevent, and it
+  // would only be caught later, by the chain-id check in assertLivePairing.
   return createPublicClient({
-    chain: xLayer,
+    chain: config.environment === "mainnet" ? xLayer : xLayerTestnet,
     transport: http(config.rpcUrl),
   });
 }

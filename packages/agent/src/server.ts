@@ -121,7 +121,9 @@ export async function startServer(
       }
       const decisionMatch = url.pathname.match(/^\/decision\/(0x[0-9a-fA-F]{64})$/);
       if (request.method === "GET" && decisionMatch) {
-        const hash = decisionMatch[1] as `0x${string}`;
+        // Hashes are content addresses, not identifiers the caller chose; a hash typed or
+        // pasted in upper case addresses the same decision document.
+        const hash = decisionMatch[1].toLowerCase() as `0x${string}`;
         const document = await agent.getDecision(hash);
         if (!document) {
           send(response, 404, { error: "decision not found" });

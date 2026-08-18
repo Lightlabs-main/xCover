@@ -13,6 +13,7 @@
     "start": "node dist/src/main.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "viem": "^2.37.0"
   },
   "devDependencies": {

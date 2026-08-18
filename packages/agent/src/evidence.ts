@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { LIVE_STATE_EVIDENCE_ID } from "./assess.js";
 import type { ChainState, Evidence } from "./types.js";
 
 export type CorpusEntry = Evidence & { text: string };
@@ -19,6 +20,9 @@ export function loadCorpus(path: string): CorpusEntry[] {
       if (typeof value[field] !== "string" || !value[field]) {
         throw new Error(`corpus line ${index + 1} is missing string field ${field}`);
       }
+    }
+    if (value.id === LIVE_STATE_EVIDENCE_ID) {
+      throw new Error(`corpus line ${index + 1} uses the reserved id ${LIVE_STATE_EVIDENCE_ID}`);
     }
     try {
       new URL(value.sourceUrl as string);

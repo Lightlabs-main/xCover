@@ -46,7 +46,7 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Deficit trigger | **Fixed and proven.** Pays pro-rata above a 50 bp floor. Unit, live-fork and corrected testnet lifecycle evidence cover dust rejection, both sides of the floor, pro-rata payout, smallest-share-in-window, empty reserve, rounding and trigger precedence. |
 | Threshold derivation | **Started for contract terms only.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound. Pricing-agent confidence and runtime controls are not yet derived; provenance is in `docs/pricing-agent.md`. |
-| Pricing agent | Scaffolded in `packages/agent`; unit-tested signing, canonical replay hashing, two-pass gate/refusal path, and environment pairing. API key and direct API model ID are present; corpus and reviewed runtime controls remain pending. |
+| Pricing agent | Scaffolded in `packages/agent`; **11 unit tests passing**, covering signing, canonical replay hashing, the two-pass gate/refusal path, fourteen named gate reasons, evidence citation, and environment pairing. The assessment call now runs on the official SDK against `claude-opus-5` and has been **exercised end to end against the live API**. Corpus and reviewed runtime controls remain pending, so no quote is claimed. |
 | Benchmark corpus | Not started — required artifact is `bench/data/corpus.jsonl` with 150–250 cited labelled scenarios |
 | Frontend | Not started |
 | X account | Not created |
@@ -91,10 +91,11 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 1. Build `bench/data/corpus.jsonl`, score it, and derive the confidence,
    disagreement, and uncertainty gates. Review the remaining runtime controls
-   using `docs/pricing-agent.md`.
-2. Verify the configured direct API model and set the reviewed agent controls.
-   The corrected testnet venue has a non-zero deficit from the completed payout
-   lifecycle, so it must refuse there until a clean eligible venue is available.
+   using `docs/pricing-agent.md`. This is the last artifact blocking a live
+   quote: the model call itself is now proven.
+2. Set the reviewed agent controls in `.env`. The corrected testnet venue has a
+   non-zero deficit from the completed payout lifecycle, so it must refuse there
+   until a clean eligible venue is available.
 3. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
    verify roles/oracle/venue/terms on chain, and commit the mainnet record only
    after the corrected testnet record is present.
@@ -151,6 +152,7 @@ the refusal path, the testnet→mainnet sequence.
 | 17 Aug 2026 | Re-checked every absence-asserting test by mutation. The invariants and separation suite all hold. Found that `payClaim`'s payout cap had no test at all and that `CoverPool` had no unit file: the invariant handler bounded the payout to `reserved + 1`, so the fuzzer could overpay by one wei and deleting the cap left every invariant green. Over-paying is theft rather than insolvency, so no invariant can see it — `test/unit/CoverPool.t.sol` added to assert the pool's guards directly. |
 | 17 Aug 2026 | Closed the deficit-trigger gap. Ten unit tests and two fork tests written for the pro-rata payout and the 50 bp floor, each mutation-checked against the original bug. Re-ran the fork suite, which had not run since the change: two tests failed because the fixed 250,000 USDT it plants is 49.8 bp of the live reserve and now sits under the floor, and the transient-deficit test was passing for that reason rather than the one it names. Fork tests now size the deficit as a share of the live reserve. 127 tests passing. `bench/threshold-derivation.md` written. |
 | 17 Aug 2026 | Correctness batch completed in source: fixed Aave oracle/aToken wiring, disabled unsafe independent policy/share transfers, enforced full-window bounded-cadence observations, fixed zero-capital share epochs, and set the next testnet demo floor to 5,000 bp. Full suite: 139 passing; live fork: 10 passing. |
+| 18 Aug 2026 | Audited the pricing agent against the live API and found it could never have quoted: the configured `claude-3-5-sonnet-20241022` returns HTTP 404 for this key, and the hand-rolled request also sent `temperature`, which the current models reject. Both faults surfaced only as a refusal, which is a correct outcome here and so hid them. Moved the call to the official SDK on `claude-opus-5` with adaptive thinking, dropped the sampling parameters, and ran a full assessment end to end against the live API. The run exposed a third fault: the model cited `live-chain-state` for facts read from the chain and the citation validator rejected the whole assessment — that id is now reserved, named in the prompt, and refused to the corpus. Also paired the viem chain descriptor to the environment, made replay lookup case-insensitive, and added six tests including a fourteen-reason gate table. 11 agent tests and 129 off-fork contract tests passing; the two new absence assertions were mutation-checked. |
 | 18 Aug 2026 | Broadcast corrected testnet set at block 38581492 and merged seven creation transaction hashes into the deployment record. Completed the live lifecycle: policy #1, signed refusal, 2,500 tUSDT induced deficit, five observations at 20-block gaps, trigger 1 (`ReserveDeficit`), and 2,500 tUSDT settlement. Direct reads confirmed policy `Paid`, pool capital 97,500 tUSDT, outstanding cover 0, and venue balance 7,500 tUSDT against 10,000 owed. |
 
 Update this table at the end of every session (§1.3).

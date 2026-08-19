@@ -20,6 +20,10 @@ export type Row = {
   classification: string;
   technique: string | null;
   sourceFamily?: string;
+  /** A model-safe mechanism title, separated from the auditable source title. */
+  modelTitle?: string;
+  /** Source/article group held out during retrieval. */
+  sourceGroup?: string;
 };
 
 export type ModelText = {
@@ -81,7 +85,7 @@ export function modelText(row: Row): ModelText {
   return {
     era: eraFor(row.publishedAt),
     riskBand: riskBandFor(row.classification),
-    mechanism: redactMechanism(row.title, row.protocol),
+    mechanism: redactMechanism(row.modelTitle ?? row.title, row.protocol),
   };
 }
 
@@ -90,9 +94,9 @@ export function evidenceId(index: number): string {
 }
 
 /**
- * Deterministic lexical retrieval.  The scenario's complete protocol group is held
- * out, and the returned evidence is rebuilt from modelText rather than copied from
- * the corpus row.
+ * Deterministic lexical retrieval. The scenario's complete protocol and source/article
+ * groups are held out, and the returned evidence is rebuilt from modelText rather than
+ * copied from the corpus row.
  */
 export function retrieve(corpus: Row[], scenario: Row, noEvidence = false, k = 12): Evidence[] {
   if (noEvidence) return [];
@@ -100,7 +104,8 @@ export function retrieve(corpus: Row[], scenario: Row, noEvidence = false, k = 1
   const want = words(`${scenarioText.riskBand} ${scenarioText.mechanism}`);
   return corpus
     .map((row, index) => ({ row, index }))
-    .filter(({ row }) => row.protocol !== scenario.protocol)
+    .filter(({ row }) => row.protocol !== scenario.protocol &&
+      !(scenario.sourceGroup && row.sourceGroup === scenario.sourceGroup))
     .map(({ row, index }) => {
       const safe = modelText(row);
       let score = 0;

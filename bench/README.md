@@ -88,7 +88,7 @@ published. That run is outstanding: it stopped on an Anthropic API credit limit.
 **No gate threshold is derived from this corpus yet, and none should be until
 the control has run.**
 
-## Gemini rebuild status — 19 August 2026
+## Gemini rebuild history — superseded Code4rena attempt
 
 The separate Code4rena-only candidate is `data/corpus-gemini.jsonl`. It contains 177
 rows across 14 protocol groups: 76 protocol-level loss associations and 101 findings
@@ -104,6 +104,24 @@ no-evidence rows produced AUC 0.33; the same six with evidence produced AUC 0.17
 Those samples are not calibration evidence, and retrieval did not improve the
 signal. No full Gemini run or confidence threshold is claimed. Full details are in
 `data/gemini-calibration-status.md`.
+
+## Gemini scenario-level rebuild — 19 August 2026
+
+The Code4rena candidate above is not used for calibration. The replacement is
+`data/corpus-gemini-scenario.jsonl`, built from 71 same-source Immunefi case
+articles: 15 articles explicitly describing realized loss and 56 Bug Fix Reviews
+describing responsible disclosure and remediation. The label is taken from the
+scenario article itself; no protocol-to-incident join is used. Mixed labels for a
+protocol are allowed, while the complete protocol and source article are held out
+from retrieval.
+
+The offline preflight passes with 100% retrieval coverage and 73.2% weighted label
+purity using a fixed five-neighbour evidence budget. The live balanced controls then
+completed 20/20 each on `gemini-3.5-flash-lite` (10 loss / 10 no-loss): no-evidence
+AUC 0.635 and 13/20 directional accuracy; evidence AUC 0.615 and 11/20. Because
+evidence did not improve the fixed sample, the gate fails. No full Gemini run and
+no confidence threshold are claimed. Raw outputs and the exact gate decision are
+in `data/gemini-scenario-calibration-status.md`.
 
 ---
 

@@ -11,6 +11,11 @@ const args = Object.fromEntries(
 );
 const corpusArg = args.corpus ?? "bench/data/corpus-gemini.jsonl";
 const outArg = args.out ?? "bench/data/gemini-corpus-check.md";
+const expectedFamily = args.sourceFamily ?? "Code4rena";
+const urlPrefix = args.urlPrefix ?? "https://github.com/code-423n4/";
+const minRows = Number(args.minRows ?? (expectedFamily === "Code4rena" ? 150 : 40));
+const maxRows = Number(args.maxRows ?? 250);
+const evidenceK = Number(args.evidenceK ?? 12);
 const corpusPath = resolve(root, corpusArg);
 const outPath = resolve(root, outArg);
 
@@ -31,12 +36,13 @@ const corpus = readCorpus(corpusPath);
 const failures: string[] = [];
 const ids = new Set<string>();
 const urls = new Set<string>();
-const protocolLabels = new Map<string, string>();
+const protocolLabels = new Map<string, Set<string>>();
+const sourceGroups = new Set<string>();
 const labelCounts = { loss: 0, no_loss: 0 };
 const modelLeakWords = /\b(?:loss|losses|lost|steal|stolen|drain|drained|exploit|exploited|hack|hacked|theft|funds?|depositor|incident|rekt|no[_ -]?loss|code4rena|github|audit|audited|finding|findings|sponsor|judged?|contest|report|protocol|outcome|label|labels)\b/i;
 
-if (corpus.length < 150 || corpus.length > 250) {
-  failures.push(`row count ${corpus.length} is outside 150–250`);
+if (corpus.length < minRows || corpus.length > maxRows) {
+  failures.push(`row count ${corpus.length} is outside ${minRows}–${maxRows}`);
 }
 if (corpus.length === 0) failures.push("corpus is empty");
 
@@ -45,15 +51,17 @@ for (const row of corpus) {
   ids.add(row.id);
   if (urls.has(row.sourceUrl)) failures.push(`duplicate sourceUrl: ${row.sourceUrl}`);
   urls.add(row.sourceUrl);
-  if (row.sourceFamily !== "Code4rena") failures.push(`${row.id} is not Code4rena sourceFamily`);
-  if (!/^https:\/\/github\.com\/code-423n4\//.test(row.sourceUrl)) {
-    failures.push(`${row.id} does not use a Code4rena GitHub URL`);
+  if (row.sourceFamily !== expectedFamily) failures.push(`${row.id} is not ${expectedFamily} sourceFamily`);
+  if (!row.sourceGroup && expectedFamily !== "Code4rena") failures.push(`${row.id} is missing sourceGroup`);
+  if (row.sourceGroup) sourceGroups.add(row.sourceGroup);
+  if (!row.sourceUrl.startsWith(urlPrefix)) {
+    failures.push(`${row.id} does not use the expected source URL prefix`);
   }
   if (row.label !== "loss" && row.label !== "no_loss") failures.push(`${row.id} has invalid label`);
   else labelCounts[row.label]++;
-  const prior = protocolLabels.get(row.protocol);
-  if (prior && prior !== row.label) failures.push(`protocol has mixed labels: ${row.protocol}`);
-  protocolLabels.set(row.protocol, row.label);
+  const labels = protocolLabels.get(row.protocol) ?? new Set<string>();
+  labels.add(row.label);
+  protocolLabels.set(row.protocol, labels);
 
   try {
     const safe = modelText(row);
@@ -67,12 +75,18 @@ for (const row of corpus) {
   }
 }
 
+if (expectedFamily === "Code4rena") {
+  for (const [protocol, labels] of protocolLabels) {
+    if (labels.size > 1) failures.push(`protocol has mixed labels: ${protocol}`);
+  }
+}
+
 const purityRows: Array<{ id: string; label: string; evidence: number; same: number }> = [];
 for (const scenario of corpus) {
-  const evidence = retrieve(corpus, scenario);
+  const evidence = retrieve(corpus, scenario, false, evidenceK);
   const evidenceRows = evidence.map((item) => corpus[Number(item.id.slice(1)) - 1]);
-  if (evidenceRows.some((row) => !row || row.protocol === scenario.protocol)) {
-    failures.push(`${scenario.id} retrieval crossed the held-out protocol boundary`);
+  if (evidenceRows.some((row) => !row || row.protocol === scenario.protocol || (scenario.sourceGroup && row.sourceGroup === scenario.sourceGroup))) {
+    failures.push(`${scenario.id} retrieval crossed the held-out protocol or source boundary`);
   }
   for (const item of evidence) {
     const keys = Object.keys(item).sort().join(",");
@@ -108,14 +122,19 @@ const report = [
   `- Corpus: \`${corpusArg}\``,
   `- Rows: ${corpus.length}`,
   `- Labels: ${labelCounts.loss} loss / ${labelCounts.no_loss} no-loss`,
-  `- Protocol groups: ${protocolLabels.size} (each group has one label)`,
+  `- Protocol groups: ${protocolLabels.size} (${[...protocolLabels.values()].filter((labels) => labels.size > 1).length} mixed-label protocol groups allowed)`,
+  `- Source/article groups: ${sourceGroups.size}`,
   `- Date range: ${dateValues[0] ?? "n/a"} through ${dateValues.at(-1) ?? "n/a"}`,
-  `- Source family: Code4rena judged findings only`,
+  `- Source family: ${expectedFamily}`,
   `- Retrieval coverage: ${(coverage * 100).toFixed(1)}% of rows have at least one neighbour`,
+  `- Retrieval neighbours per scenario: ${evidenceK}`,
   `- Retrieval label purity: ${(meanPurity * 100).toFixed(1)}% weighted mean; ${(maxPurity * 100).toFixed(1)}% maximum`,
   `- Retrieval gate: weighted mean must be at most ${(retrievalGate * 100).toFixed(0)}%`,
   "",
-  "The loss label is protocol-level: a protocol appears in the checked incident snapshot. It does not assert that the individual finding caused that incident. The prompt path exposes only redacted mechanism text, risk band, era, and opaque evidence IDs; provenance and labels remain evaluation-only.",
+  expectedFamily === "Code4rena"
+    ? "The loss label is protocol-level: a protocol appears in the checked incident snapshot. It does not assert that the individual finding caused that incident."
+    : "Each label is taken from the outcome described by the same Immunefi article as the scenario: realized loss versus a reported/fixed or mitigated case. No cross-source incident join is used.",
+  "The prompt path exposes only redacted mechanism text, risk band, era, and opaque evidence IDs; provenance and labels remain evaluation-only.",
   "",
   ...(failures.length ? ["## Failures", "", ...failures.map((failure) => `- ${failure}`)] : ["No offline leakage, schema, source-family, or retrieval-purity failures."]),
   "",

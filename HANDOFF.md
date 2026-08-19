@@ -333,9 +333,9 @@ session left, written so the next one does not repeat paid mistakes.
 
 - `packages/agent` implements the full §5.2 pipeline and has its unit tests passing.
   It supports explicit Anthropic and Gemini providers through their official SDKs;
-  the Anthropic path has been proven end to end against the live API. Gemini has now
-  completed a one-row live smoke against `gemini-3.5-flash-lite`; calibration stopped
-  at the control gates and no threshold is claimed.
+  the Anthropic path has been proven end to end against the live API. Gemini has
+  completed a fresh one-row smoke against the replacement scenario corpus and
+  calibration stopped at the evidence control; no threshold is claimed.
 - `bench/data/corpus.jsonl` — **229 labelled scenarios, every citation fetched and
   checked.** 148 incidents cited to `rekt.news`, 81 judged-valid Code4rena findings.
   Build scripts in `bench/tools/` reproduce it. This artifact is sound.
@@ -367,6 +367,10 @@ sourcing problem, not a code or budget problem.
    to deploy.
 
 ### Gemini calibration continuation — start here next session
+
+This numbered continuation was written before the scenario-level rebuild and is
+now historical. The current result is recorded in the “Current Gemini attempt”
+section below; do not restart the old 150–250-row Code4rena workflow.
 
 The Gemini adapter is now implemented in `packages/agent/src/gemini.ts`, selected by
 `PRICING_MODEL_PROVIDER=gemini`, and covered by the agent build and tests. It is the
@@ -435,7 +439,7 @@ Do this in order, and stop at the stated gates:
    source or label leak. A Gemini result that fails the same diagnostics is evidence that
    the corpus is still unsuitable, not evidence that more credits will solve it.
 
-### Gemini attempt on 19 August 2026 — stopped at controls
+### Superseded Gemini attempt on 19 August 2026 — Code4rena proxy
 
 The new Code4rena-only candidate is now materialised as `bench/data/corpus-gemini.jsonl`
 with 177 rows across 14 protocol groups. `bench/data/gemini-corpus-check.md` passes the
@@ -450,6 +454,22 @@ findings produced a six-row balanced control with AUC 0.33; the same six rows wi
 evidence produced AUC 0.17. Those samples are too small to certify a calibration curve,
 and retrieval did not improve the signal, so no evidence run or full 177-row run was
 started. Full details are in `bench/data/gemini-calibration-status.md`.
+
+### Current Gemini attempt on 19 August 2026 — scenario-level labels
+
+The Code4rena proxy above is not a valid calibration corpus and must not be scored
+again. The replacement is `bench/data/corpus-gemini-scenario.jsonl`, built from 71
+Immunefi case articles with labels taken from each article's own realized-loss or
+responsible-remediation outcome. It has 15 loss and 56 no-loss rows; protocol labels
+may legitimately mix, and both protocol and source article are held out of retrieval.
+
+The offline preflight passes at a fixed five-neighbour evidence budget. A balanced
+20-row no-evidence control (10/10) completed 20/20 with AUC 0.635 and 13/20
+directional accuracy. The identical evidence control completed 20/20 with AUC
+0.615 and 11/20. The evidence gate therefore fails: retrieval did not improve
+discrimination. Full calibration and threshold derivation are blocked; do not spend
+more Gemini calls on this corpus expecting a threshold. The raw runs and exact
+decision are in `bench/data/gemini-scenario-calibration-status.md`.
 
 ### Budget reality
 

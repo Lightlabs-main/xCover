@@ -36,6 +36,7 @@ const balanced = "balanced" in args;
 // it is also almost the entire cost of a run.
 const effort = (args.effort ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
 const concurrency = Number(args.concurrency ?? 6);
+const evidenceK = Number(args.evidenceK ?? 12);
 const out = resolve(root, args.out ?? "bench/data/scores.jsonl");
 const corpusArg = args.corpus ?? "bench/data/corpus.jsonl";
 const corpusPath = resolve(root, corpusArg);
@@ -182,7 +183,7 @@ const FRAMINGS = [
 ];
 
 async function scoreOne(scenario: Row) {
-  const evidence = retrieve(corpus, scenario, noEvidence);
+  const evidence = retrieve(corpus, scenario, noEvidence, evidenceK);
   const [a, b] = await Promise.all(FRAMINGS.map((f: string) => pass(f, scenario, evidence)));
   return {
     id: scenario.id, corpus: corpusArg, label: scenario.label, protocol: scenario.protocol,
@@ -198,7 +199,7 @@ async function scoreOne(scenario: Row) {
     ),
     uncertaintyLoadingBps: Math.round((a.uncertaintyLoadingBps + b.uncertaintyLoadingBps) / 2),
     missingFactCount: new Set([...a.missingFacts, ...b.missingFacts]).size,
-    provider, model, effort, noEvidence,
+    provider, model, effort, noEvidence, evidenceK,
     inputTokens: a.usage.input + b.usage.input,
     outputTokens: a.usage.output + b.usage.output,
     passes: [a, b],

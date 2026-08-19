@@ -333,8 +333,9 @@ session left, written so the next one does not repeat paid mistakes.
 
 - `packages/agent` implements the full §5.2 pipeline and has its unit tests passing.
   It supports explicit Anthropic and Gemini providers through their official SDKs;
-  the Anthropic path has been proven end to end against the live API, while the
-  Gemini path has been build- and unit-tested without a live paid request.
+  the Anthropic path has been proven end to end against the live API. Gemini has now
+  completed a one-row live smoke against `gemini-3.5-flash-lite`; calibration stopped
+  at the control gates and no threshold is claimed.
 - `bench/data/corpus.jsonl` — **229 labelled scenarios, every citation fetched and
   checked.** 148 incidents cited to `rekt.news`, 81 judged-valid Code4rena findings.
   Build scripts in `bench/tools/` reproduce it. This artifact is sound.
@@ -433,6 +434,22 @@ Do this in order, and stop at the stated gates:
    the failure. Do not spend another full run on the same corpus expecting tuning to fix a
    source or label leak. A Gemini result that fails the same diagnostics is evidence that
    the corpus is still unsuitable, not evidence that more credits will solve it.
+
+### Gemini attempt on 19 August 2026 — stopped at controls
+
+The new Code4rena-only candidate is now materialised as `bench/data/corpus-gemini.jsonl`
+with 177 rows across 14 protocol groups. `bench/data/gemini-corpus-check.md` passes the
+offline source-family, prompt-leakage, whole-protocol holdout and retrieval-purity gates
+(53.2% weighted purity against a 75% stop threshold). The loss label is explicitly
+protocol-level and does not claim that each individual finding caused an incident.
+
+One live smoke succeeded against `gemini-3.5-flash-lite`. The first 152-row candidate's
+partial no-evidence control was rejected after AUC 0.81 on 12 completed rows, with the
+remaining requests stopped by the free-tier quota. Adding Sturdy V1 and Tapioca DAO
+findings produced a six-row balanced control with AUC 0.33; the same six rows with
+evidence produced AUC 0.17. Those samples are too small to certify a calibration curve,
+and retrieval did not improve the signal, so no evidence run or full 177-row run was
+started. Full details are in `bench/data/gemini-calibration-status.md`.
 
 ### Budget reality
 

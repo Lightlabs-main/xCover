@@ -17,14 +17,10 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { LIVE_STATE_EVIDENCE_ID } from "../src/assess.js";
 import { generateGeminiJson } from "../src/gemini.js";
+import { promptSituation, retrieve } from "./benchmark.mjs";
+import type { Evidence, Row } from "./benchmark.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-
-type Row = {
-  id: string; title: string; sourceUrl: string; publishedAt: string; protocol: string;
-  outcome: string; text: string; label: "loss" | "no_loss"; classification: string;
-  technique: string | null;
-};
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => a.replace(/^--/, "").split("=") as [string, string]),
@@ -41,6 +37,8 @@ const balanced = "balanced" in args;
 const effort = (args.effort ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
 const concurrency = Number(args.concurrency ?? 6);
 const out = resolve(root, args.out ?? "bench/data/scores.jsonl");
+const corpusArg = args.corpus ?? "bench/data/corpus.jsonl";
+const corpusPath = resolve(root, corpusArg);
 const provider = process.env.PRICING_MODEL_PROVIDER ?? "anthropic";
 if (provider !== "anthropic" && provider !== "gemini") {
   throw new Error("PRICING_MODEL_PROVIDER must be anthropic or gemini");
@@ -62,69 +60,9 @@ const client = provider === "anthropic"
   ? new Anthropic({ apiKey, timeout: 300_000, maxRetries: 3 })
   : null;
 
-const corpus: Row[] = readFileSync(resolve(root, "bench/data/corpus.jsonl"), "utf8")
+const corpus: Row[] = readFileSync(corpusPath, "utf8")
   .split("\n").filter(Boolean).map((l) => JSON.parse(l) as Row);
-
-const STOP = new Set(["the","and","for","that","was","were","with","from","this","have","has","not","its","are","a","an","of","in","on","to","by"]);
-const terms = (text: string) =>
-  new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 3 && !STOP.has(t)));
-
-/**
- * Deterministic lexical retrieval over everything except the scenario's own protocol.
- *
- * Excluding just the row under test is not enough: 81 of the 229 rows have siblings from
- * the same protocol, and 28 of them are Reserve, every one labelled no_loss. Retrieval
- * would hand the model another row from the same protocol and it would read the answer off
- * that sibling's outcome. The whole protocol is held out.
- */
-function retrieve(scenario: Row, k = 12) {
-  if (noEvidence) return [];
-  const want = terms(`${scenario.classification} ${scenario.title}`);
-  return corpus
-    .filter((row) => row.protocol !== scenario.protocol)
-    .map((row) => {
-      const have = terms(`${row.title} ${row.protocol} ${row.classification} ${row.text}`);
-      let score = 0;
-      for (const t of want) if (have.has(t)) score += 1;
-      return { row, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id))
-    .slice(0, k)
-    .map(({ row }) => ({
-      id: row.id, title: row.title, sourceUrl: row.sourceUrl, publishedAt: row.publishedAt,
-      protocol: row.protocol, outcome: row.outcome, excerpt: row.text,
-    }));
-}
-
-/**
- * How a scenario is shown to the model.
- *
- * The first version named the protocol, and the control proved what that bought: with every
- * piece of evidence removed the model still scored 17 of 20 against a chance rate of 10. It
- * recognises Balancer and Yearn as protocols that were exploited, so it was recalling an
- * outcome, not judging a risk. The name is gone, and so is the exact date, which identifies
- * an incident almost as precisely.
- *
- * Chain and target type are withheld for a different reason: the no-loss rows carry no chain
- * and a constant target type, so either field would separate the two halves perfectly on its
- * own — a leak of the corpus's construction rather than of anything about the risk.
- *
- * What remains is an era and a mechanism. The mechanism is still written in each half's own
- * voice, and that residual difference is what the next control run measures.
- */
-function situation(scenario: Row) {
-  const mechanism = scenario.label === "loss"
-    ? (scenario.technique && scenario.technique !== "Unknown" ? scenario.technique : scenario.classification)
-    : scenario.title;
-  const [year, month] = scenario.publishedAt.split("-");
-  return {
-    era: `${year}-H${Number(month) <= 6 ? 1 : 2}`,
-    mechanism: mechanism.replace(/\s*-\s*REKT\s*$/i, "").trim(),
-  };
-}
-
-function prompt(framing: string, scenario: Row, evidence: ReturnType<typeof retrieve>) {
+function prompt(framing: string, scenario: Row, evidence: Evidence[]) {
   return [
     "You are the risk-assessment component of xCover's pricing agent, judging whether a described",
     "protocol-risk situation resulted in depositor loss. You are not told the outcome, and the",
@@ -147,7 +85,7 @@ function prompt(framing: string, scenario: Row, evidence: ReturnType<typeof retr
       concerns: ["string"], missingFacts: ["string"],
       conclusions: [{ text: "string", evidenceIds: ["id"] }],
     }),
-    `SITUATION:\n${JSON.stringify(situation(scenario))}`,
+    `SITUATION:\n${JSON.stringify(promptSituation(scenario))}`,
     evidence.length === 0
       ? "RETRIEVED EVIDENCE:\nNone was retrievable for this scenario."
       : `RETRIEVED EVIDENCE:\n${JSON.stringify(evidence)}`,
@@ -201,7 +139,7 @@ const int = (v: unknown, field: string): number => {
   throw new Error(`${field} must be a non-negative integer`);
 };
 
-async function pass(framing: string, scenario: Row, evidence: ReturnType<typeof retrieve>) {
+async function pass(framing: string, scenario: Row, evidence: Evidence[]) {
   let raw: Record<string, unknown>;
   let usage: { input: number; output: number };
   if (provider === "gemini") {
@@ -244,10 +182,10 @@ const FRAMINGS = [
 ];
 
 async function scoreOne(scenario: Row) {
-  const evidence = retrieve(scenario);
+  const evidence = retrieve(corpus, scenario, noEvidence);
   const [a, b] = await Promise.all(FRAMINGS.map((f: string) => pass(f, scenario, evidence)));
   return {
-    id: scenario.id, label: scenario.label, protocol: scenario.protocol,
+    id: scenario.id, corpus: corpusArg, label: scenario.label, protocol: scenario.protocol,
     classification: scenario.classification, evidenceCount: evidence.length,
     lossLikelihoodBps: Math.round((a.lossLikelihoodBps + b.lossLikelihoodBps) / 2),
     // Confidence is the lower of the two framings, and disagreement is a measured signal,
@@ -282,8 +220,14 @@ if (balanced) {
   // never sees a negative cannot tell discrimination from a constant answer.
   // Seeded shuffle: taking the head of each class samples the oldest incidents and only the
   // first two audit contests, which is not representative of either half.
-  let seed = 20260818;
-  const shuffled = [...pending].sort(() => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) - 0.5);
+  let seed = 20260818n;
+  const modulus = 2147483648n;
+  const shuffled = [...pending];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    seed = (seed * 1103515245n + 12345n) % modulus;
+    const j = Number((seed * BigInt(i + 1)) / modulus);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   const loss = shuffled.filter((r) => r.label === "loss");
   const noLoss = shuffled.filter((r) => r.label === "no_loss");
   const half = Math.floor((limit || pending.length) / 2);

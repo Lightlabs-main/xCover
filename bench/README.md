@@ -88,6 +88,23 @@ published. That run is outstanding: it stopped on an Anthropic API credit limit.
 **No gate threshold is derived from this corpus yet, and none should be until
 the control has run.**
 
+## Gemini rebuild status — 19 August 2026
+
+The separate Code4rena-only candidate is `data/corpus-gemini.jsonl`. It contains 177
+rows across 14 protocol groups: 76 protocol-level loss associations and 101 findings
+from protocols with no incident in the checked snapshot. `data/gemini-corpus-check.md`
+records the offline schema, source-family, prompt-leakage and retrieval checks. The
+weighted retrieval label purity is 53.2%, below the 75% stop gate.
+
+The Gemini smoke call succeeded against `gemini-3.5-flash-lite`, but calibration was
+stopped at the live controls. A 152-row predecessor produced a partial no-evidence
+control with AUC 0.81 before the free-tier quota interrupted it, so it was expanded
+with Sturdy V1 and Tapioca DAO findings. On the revised corpus, six balanced
+no-evidence rows produced AUC 0.33; the same six with evidence produced AUC 0.17.
+Those samples are not calibration evidence, and retrieval did not improve the
+signal. No full Gemini run or confidence threshold is claimed. Full details are in
+`data/gemini-calibration-status.md`.
+
 ---
 
 # Result: this corpus cannot support the §5.4 calibration

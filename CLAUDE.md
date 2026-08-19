@@ -132,9 +132,12 @@ bench/                            benchmark corpus and threshold derivation
 
 All five §4 contracts are written; 139 local contract tests pass; the corrected
 contract set is deployed and lifecycle-proven on X Layer testnet (chain 1952).
-The pricing agent is scaffolded and unit-tested; its API key and direct API
-model ID are present, but its benchmark corpus and reviewed runtime controls
-are still unset. Mainnet remains undeployed.
+The pricing agent is implemented and unit-tested; its Anthropic path has been
+exercised live and its Gemini adapter is build- and unit-tested without a paid
+live request. The 229-row benchmark corpus is assembled and scored, but the
+confidence signal failed calibration, so no threshold or live quote is claimed.
+The read-only presentation layer is not yet built; plan it under `apps/web`.
+Mainnet remains undeployed pending funding and gas.
 `HANDOFF.md` §4 has the role-wiring table and the design decisions that are
 load-bearing; §5 lists traps already paid for once — read both before writing
 contract or agent code.

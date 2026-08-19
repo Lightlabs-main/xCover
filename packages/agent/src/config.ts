@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { getAddress, isAddress, type Address, type Hex } from "viem";
-import type { AgentConfig, DeploymentRecord, Environment } from "./types.js";
+import type { AgentConfig, DeploymentRecord, Environment, ModelProvider } from "./types.js";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -118,6 +118,12 @@ export function loadConfig(
   const rpcUrl = required(env, environment === "testnet" ? "XLAYER_TESTNET_RPC" : "XLAYER_MAINNET_RPC");
   const deployment = loadDeployment(rootDir, environment);
 
+  const rawProvider = required(env, "PRICING_MODEL_PROVIDER");
+  if (rawProvider !== "anthropic" && rawProvider !== "gemini") {
+    throw new ConfigError("PRICING_MODEL_PROVIDER must be anthropic or gemini");
+  }
+  const modelProvider = rawProvider as ModelProvider;
+
   const confidenceThresholdBps = parseBigInt(env, "PRICING_CONFIDENCE_THRESHOLD_BPS");
   const maxEnsembleDisagreementBps = parseBigInt(env, "PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS");
   const maxUncertaintyLoadingBps = parseBigInt(env, "PRICING_MAX_UNCERTAINTY_LOADING_BPS");
@@ -141,22 +147,25 @@ export function loadConfig(
   }
   if (maxPremiumRateRay === 0n) throw new ConfigError("PRICING_MAX_PREMIUM_RATE_RAY must be greater than zero");
 
-  const apiKey = env.ANTHROPIC_API_KEY?.trim() || undefined;
-  const model = env.ANTHROPIC_MODEL?.trim() || undefined;
-  if (apiKey && !model) throw new ConfigError("ANTHROPIC_MODEL is required when ANTHROPIC_API_KEY is set");
+  const modelApiKey = (modelProvider === "gemini" ? env.GEMINI_API_KEY : env.ANTHROPIC_API_KEY)?.trim() || undefined;
+  const modelName = (modelProvider === "gemini" ? env.GEMINI_MODEL : env.ANTHROPIC_MODEL)?.trim() || undefined;
+  if (modelApiKey && !modelName) {
+    throw new ConfigError(`${modelProvider === "gemini" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL"} is required when the selected API key is set`);
+  }
 
   return {
     environment,
     chainId,
     rpcUrl,
     deployment,
+    modelProvider,
+    modelApiKey,
+    modelName,
     pricerPrivateKey: parsePrivateKey(required(env, "PRICER_PRIVATE_KEY")),
     engineVersion: required(env, "PRICING_ENGINE_VERSION"),
     quoteValidityBlocks: quoteValidityBlocks(env),
     corpusPath: resolve(rootDir, env.PRICING_CORPUS_PATH?.trim() || "bench/data/corpus.jsonl"),
     decisionStorePath: resolve(rootDir, env.PRICING_DECISION_STORE_PATH?.trim() || "data/pricing-decisions"),
-    anthropicApiKey: apiKey,
-    anthropicModel: model,
     pricing: {
       confidenceThresholdBps,
       maxEnsembleDisagreementBps,

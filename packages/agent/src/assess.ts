@@ -42,7 +42,7 @@ function serialise(value: unknown): string {
   return JSON.stringify(value, (_key, item) => (typeof item === "bigint" ? item.toString() : item));
 }
 
-function promptFor(framing: string, state: ChainState, evidence: Evidence[]): string {
+export function promptFor(framing: string, state: ChainState, evidence: Evidence[]): string {
   return [
     "You are the risk-assessment component of xCover's pricing agent.",
     "Return JSON only. Do not use markdown.",
@@ -54,10 +54,10 @@ function promptFor(framing: string, state: ChainState, evidence: Evidence[]): st
     `Framing: ${framing}`,
     "Required JSON shape:",
     JSON.stringify({
-      baseHazardPpmPerBlock: "integer",
-      uncertaintyLoadingBps: "integer 0..10000",
-      confidenceBps: "integer 0..10000",
-      hazardFactors: [{ name: "string", severityBps: "integer 0..10000", rationale: "string", evidenceIds: ["corpus-id"] }],
+      baseHazardPpmPerBlock: "decimal integer string",
+      uncertaintyLoadingBps: "decimal integer string 0..10000",
+      confidenceBps: "decimal integer string 0..10000",
+      hazardFactors: [{ name: "string", severityBps: "decimal integer string 0..10000", rationale: "string", evidenceIds: ["corpus-id"] }],
       concerns: ["string"],
       missingFacts: ["string"],
       conclusions: [{ text: "string", evidenceIds: ["corpus-id"] }],
@@ -66,6 +66,60 @@ function promptFor(framing: string, state: ChainState, evidence: Evidence[]): st
     `RETRIEVED EVIDENCE:\n${serialise(evidence)}`,
   ].join("\n\n");
 }
+
+/**
+ * The Gemini response schema is deliberately stricter than prompt-only JSON. All values that
+ * become bigint are decimal strings so the provider cannot round a chain-sized integer through
+ * a JSON number before the common parser validates it.
+ */
+export const assessmentResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "baseHazardPpmPerBlock",
+    "uncertaintyLoadingBps",
+    "confidenceBps",
+    "hazardFactors",
+    "concerns",
+    "missingFacts",
+    "conclusions",
+  ],
+  properties: {
+    baseHazardPpmPerBlock: { type: "string", description: "Non-negative decimal integer." },
+    uncertaintyLoadingBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+    confidenceBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+    hazardFactors: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "severityBps", "rationale", "evidenceIds"],
+        properties: {
+          name: { type: "string" },
+          severityBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+          rationale: { type: "string" },
+          evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
+        },
+      },
+    },
+    concerns: { type: "array", items: { type: "string" } },
+    missingFacts: { type: "array", items: { type: "string" } },
+    conclusions: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "evidenceIds"],
+        properties: {
+          text: { type: "string" },
+          evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
+        },
+      },
+    },
+  },
+} as const;
 
 export function parseResponse(raw: unknown, framing: string, model: string, evidence: Evidence[]): Assessment {
   if (!raw || typeof raw !== "object") throw new AssessmentError("model response was not an object");
@@ -120,7 +174,7 @@ export function parseResponse(raw: unknown, framing: string, model: string, evid
   };
 }
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   const trimmed = text.trim();
   const withoutFence = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
@@ -130,7 +184,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-export async function assess(
+export async function assessAnthropic(
   apiKey: string,
   model: string,
   framing: string,

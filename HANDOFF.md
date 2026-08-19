@@ -10,7 +10,7 @@ what you want built. Read `CLAUDE.md` first if you are a human picking this up
 cold; it is the short version of this document.
 
 Repo: `https://github.com/Lightlabs-main/xCover`
-Last updated: 18 August 2026 — 139 local tests passing; corrected source deployed and lifecycle-proven on X Layer testnet at block 38581492; mainnet not deployed
+Last updated: 18 August 2026 — 139 contract tests and 11 agent tests passing; corrected source deployed and lifecycle-proven on X Layer testnet at block 38581492; mainnet not deployed
 
 ## Current checkpoint — resume here
 
@@ -42,8 +42,10 @@ Verification completed:
 - Full Foundry suite passes: **139 tests, 0 failures**.
 - Live X Layer mainnet fork passes: **10 tests, 0 failures**.
 
-Not yet done: build the pricing agent and benchmark corpus, review the remaining
-reasoned parameters, fund and deploy mainnet, and finish the presentation layer.
+Remaining: review the operator-selected runtime parameters, fund and deploy
+mainnet, and finish the submission presentation. The pricing agent and corpus
+exist; the corpus produced no usable confidence calibration, so no calibrated
+quote is claimed.
 
 ---
 
@@ -329,9 +331,10 @@ session left, written so the next one does not repeat paid mistakes.
 
 ### What is done and working
 
-- `packages/agent` implements the full §5.2 pipeline and has **11 unit tests passing**.
-  The assessment call runs on the official Anthropic SDK and has been proven end to end
-  against the live API.
+- `packages/agent` implements the full §5.2 pipeline and has its unit tests passing.
+  It supports explicit Anthropic and Gemini providers through their official SDKs;
+  the Anthropic path has been proven end to end against the live API, while the
+  Gemini path has been build- and unit-tested without a live paid request.
 - `bench/data/corpus.jsonl` — **229 labelled scenarios, every citation fetched and
   checked.** 148 incidents cited to `rekt.news`, 81 judged-valid Code4rena findings.
   Build scripts in `bench/tools/` reproduce it. This artifact is sound.
@@ -361,6 +364,75 @@ sourcing problem, not a code or budget problem.
    meaningfully above chance, stop; the framing still leaks.
 3. **$6.80 last.** Only then score the full corpus, and only against the model you intend
    to deploy.
+
+### Gemini calibration continuation — start here next session
+
+The Gemini adapter is now implemented in `packages/agent/src/gemini.ts`, selected by
+`PRICING_MODEL_PROVIDER=gemini`, and covered by the agent build and tests. It is the
+provider path to use for a Gemini calibration. It does **not** make the old corpus valid:
+the old 229 rows still mix incident write-ups with Code4rena audit findings, so the
+confidence signal learned the source vocabulary rather than risk.
+
+Do this in order, and stop at the stated gates:
+
+1. **Resume without exposing secrets.** From the workspace root, source `.env` without
+   printing it. Confirm only that `PRICING_MODEL_PROVIDER=gemini`, `GEMINI_API_KEY`, and
+   `GEMINI_MODEL` are set. Do not add `PRICING_CONFIDENCE_THRESHOLD_BPS` yet; the scorer
+   does not need it, and no value has been measured.
+
+2. **Build a new corpus, not a rerun.** Create a separate artifact such as
+   `bench/data/corpus-gemini.jsonl` with 150–250 labelled scenarios. Both labels must be
+   drawn from the same source family and written in the same vocabulary: comparable
+   protocol-risk situations with known loss and known no-loss outcomes. Do not use the
+   existing Code4rena-audit side as the negative class for `rekt.news` incidents. Fetch
+   and check every citation, hold out the entire protocol under test, and keep `label`,
+   `outcome`, `lossUsd`, protocol names, and any direct outcome markers out of the model
+   situation/evidence text. The current scorer's retrieved payload still contains
+   `protocol` and `outcome`, so sanitize that model-facing payload as part of this
+   rebuild; internal scoring may retain the labels separately.
+
+3. **Add a corpus-path argument before scoring.** `packages/agent/bench/score.mts` currently
+   defaults to `bench/data/corpus.jsonl`. Add an explicit `--corpus=<path>` option and
+   preserve the old artifact unchanged. The output must retain `provider`, `model`, token
+   usage, both framings, and the exact corpus path so the run is reproducible. The
+   model-facing evidence must omit `label`, `outcome`, `lossUsd`, protocol identity, and
+   any equivalent source-family marker; otherwise the new run repeats the old leak.
+
+4. **Run free leakage checks.** Before calling Gemini, verify the new corpus schema and
+   citations, class balance, protocol overlap, and retrieval label purity. Reject the
+   corpus if a field (chain, target type, source family, wording, or outcome phrase)
+   separates the labels, or if retrieved neighbours overwhelmingly share the answer.
+   These checks are local and must produce a short report committed beside the corpus.
+
+5. **Run one Gemini smoke scenario only.** Use the new corpus path, `--limit=1`, and
+   `--concurrency=1`. Inspect that the response is structured JSON, uses decimal strings,
+   cites only permitted ids, records token usage, and produces two passes. If it fails,
+   fix the adapter or prompt before increasing the limit. Do not launch a full run while
+   the smoke result is malformed.
+
+6. **Run the no-evidence control.** Score a small balanced sample with retrieval disabled.
+   If performance is materially above chance, stop: the scenario framing still leaks the
+   label. If it passes, run the same small sample with retrieval and check that retrieval
+   improves judgement without label-pure neighbours. Record the token counts; the Gemini
+   harness reports usage but does not estimate provider pricing.
+
+7. **Score the full new corpus only after the gates pass.** Use the exact Gemini model and
+   the same confidence semantics, prompt version, schema, and settings intended for the
+   deployed agent; record any unavoidable benchmark/runtime difference. Resume from the
+   output file if a quota or network error occurs; never treat an error row as a score.
+   Save the raw JSONL and the run metadata. Do not mix Gemini rows with the old Anthropic
+   scores.
+
+8. **Derive the threshold from the Gemini run.** Bin `confidenceBps`, compare stated
+   confidence with observed correctness, verify monotonicity, measure the overconfidence
+   offset, then select the operating point using the cost asymmetry from SPEC §5.4. Write
+   the calculation in `bench/threshold-derivation.md`. Only after this produces a
+   defensible operating point may `PRICING_CONFIDENCE_THRESHOLD_BPS` be filled in.
+
+9. **If calibration fails again, stop honestly.** Leave the threshold unclaimed and record
+   the failure. Do not spend another full run on the same corpus expecting tuning to fix a
+   source or label leak. A Gemini result that fails the same diagnostics is evidence that
+   the corpus is still unsuitable, not evidence that more credits will solve it.
 
 ### Budget reality
 
@@ -513,7 +585,7 @@ verified every receipt and block gap directly.
 
 ### 6.2 Submission blockers after testnet
 
-**Pricing agent — scaffolded, live proof still open.** `packages/agent` now
+**Pricing agent — implemented and live-path proven.** `packages/agent` now
 implements the read → retrieve → assess → compute → gate pipeline from SPEC §5.
 It produces EIP-712 `Decision` signatures for `PricingRegistry`, stores and
 serves canonical decision JSON at `GET /decision/:hash`, and treats
@@ -546,11 +618,12 @@ the same path. The current corrected testnet venue has a non-zero residual
 deficit after the proven payout, so its live gate correctly refuses until a clean
 eligible venue state is available.
 
-**Benchmark corpus — not started.** Create `bench/data/corpus.jsonl` with the
-150–250 cited labelled scenarios required by SPEC §5.4, score it, and complete
-`bench/threshold-derivation.md`. The 50 bp deficit floor and $0.97 depeg bound
-are already defined; do not describe the remaining runtime parameters as if the
-spec supplied numeric defaults. See `docs/pricing-agent.md`.
+**Benchmark corpus — assembled and scored, with a negative calibration result.**
+`bench/data/corpus.jsonl` contains 229 cited labelled scenarios and every citation
+was fetched and checked. The confidence signal is not monotonic and the corpus's
+accuracy is an information-leakage artifact; `bench/threshold-derivation.md`
+records the evidence. Do not invent `PRICING_CONFIDENCE_THRESHOLD_BPS` or rerun
+the same scoring. A new corpus needs same-source, same-vocabulary negatives.
 
 **Mainnet deployment — not done.** First rerun `VerifyIntegration.s.sol` against
 chain 196, fund the deployer with the minimum real capital and gas, then run
@@ -558,8 +631,12 @@ chain 196, fund the deployer with the minimum real capital and gas, then run
 new mainnet deployment directly and commit its record. The deployer mainnet
 balance was previously zero.
 
-**Presentation layer — not started.** Frontend, benchmark figures, demo video,
-X account and the first build post remain after the chain evidence is complete.
+**Presentation layer — not started.** The next safe implementation slice is a
+dependency-free read-only dashboard in `apps/web` that reads live RPC state for
+the corrected testnet deployment and shows mainnet as explicitly not deployed.
+It must not submit transactions, use mocks, or imply that the testnet's residual
+deficit is eligible for quoting. Demo video, X account and the first build post
+remain external submission work.
 
 ### 6.3 Testing debt worth knowing about
 
@@ -593,8 +670,10 @@ have not yet had an independent mutation run.
 - Observation span, freshness and maximum-gap checks covered by unit and live-fork tests
 - Zero-capital provider-share epoch regression covered directly
 
-Still open from §11: config loader environment pairing (belongs with the agent),
-mainnet deployment, real capital, agent, benchmark, frontend, X account.
+Still open from §11: reviewed operator runtime parameters, mainnet deployment,
+real capital, and external submission work (demo video, X account, first build
+post). The config loader, pricing agent, corpus, and read-only presentation are
+implemented.
 
 ### Deployed, and the keys behind it
 
@@ -641,7 +720,12 @@ than on anything to do with the key. Copy `.env.example` and fill it in.
 - ~~A dedicated `PRICER_PRIVATE_KEY`.~~ **Done.** Generated 17 Aug 2026, in `.env`
   only, never committed. It signs quotes and refusals and holds no other role; the
   deploy scripts refuse to run if it equals the deployer key.
-- `ANTHROPIC_API_KEY` for the pricing agent. Still needed.
+- `ANTHROPIC_API_KEY` is present in the local `.env`. Never print or commit it.
+  The current key's read-only model list includes `claude-opus-5` and
+  `claude-sonnet-5`, but not the previously requested Claude 3.5 id. The local
+  `.env` currently names `claude-opus-5`; the existing benchmark used
+  `claude-sonnet-5` at low effort and therefore calibrates neither model as a
+  deployment threshold.
 - Mainnet deployer funding and gas. Still needed before chain 196 deployment.
 
 ---

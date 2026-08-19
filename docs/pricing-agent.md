@@ -5,6 +5,12 @@ agent's behavior, but not every deployment parameter. A value must not be
 described as “from the spec” when it is actually a runtime choice or a result of
 benchmark calibration.
 
+The agent supports two explicit assessment providers: `anthropic` through the
+official Anthropic SDK and `gemini` through Google's official `@google/genai`
+SDK. The provider, key, and model are committed into each assessment's model
+field and decision metadata; switching providers therefore requires calibrating
+and publishing the selected provider/model configuration as a new run.
+
 ## What the specification defines
 
 - The read → retrieve → assess → compute → gate pipeline (§5.2).
@@ -21,7 +27,9 @@ benchmark calibration.
 
 | Setting/artifact | Classification | Current status |
 |---|---|---|
-| `ANTHROPIC_MODEL` | Provider configuration | `claude-opus-5`, verified live: present in `GET /v1/models` and exercised through `assess()` |
+| `PRICING_MODEL_PROVIDER` | Provider configuration | Required: `anthropic` or `gemini`; selects which API key and model variables are used |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Provider configuration | Used when provider is `anthropic`; the model must be available to the selected Anthropic key |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | Provider configuration | Used when provider is `gemini`; the model must be available to the selected Gemini key |
 | `XCOVER_ENVIRONMENT` | Deployment selection | Must be `testnet` or `mainnet`; the loader checks the live venue |
 | `PRICING_ENGINE_VERSION` | Decision metadata | Set to `pricing-1.0.0/xlayer-usdt` in the example |
 | `QUOTE_TTL_BLOCKS` | Runtime policy | Exact value is not specified by §5; review before mainnet |
@@ -40,12 +48,17 @@ but the on-chain decision is block-based, so production runs should provide
 
 ## The model call
 
-The assessment request is made with the official Anthropic SDK rather than a
-hand-rolled HTTP body, because the hand-rolled one had already drifted: it sent
-`temperature`, which the current models reject outright. The request carries no
-sampling parameters, uses adaptive thinking at `high` effort, and treats a
-safety refusal or a truncated response as a failed assessment rather than
-parsing a number out of an incomplete answer.
+The selected provider is called through its official SDK: Anthropic uses the
+Anthropic SDK, while Gemini uses Google's `@google/genai` SDK and server-side
+structured JSON output. The Anthropic request carries no sampling parameters
+and uses adaptive thinking at `high` effort. Both paths treat a safety refusal,
+blocked response, missing text, or truncated response as a failed assessment
+rather than parsing a number out of an incomplete answer.
+
+The provider boundary is deliberately small. Both providers use the same
+prompt, decimal-string representation for chain-sized integers, parser, and
+evidence-id validation; only transport and structured-output configuration are
+provider-specific.
 
 Evidence ids are checked against the retrieved corpus plus one reserved id,
 `live-chain-state`, for facts read directly from the chain. That id is not a

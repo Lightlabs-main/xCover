@@ -190,10 +190,32 @@ configured venue and `PricingRegistry` deployment, retrieves only cited corpus
 evidence, runs two differently framed model assessments, computes the rate in
 deterministic code, applies refusal gates, signs the EIP-712 decision, and serves
 `GET /decision/:hash`. It does not submit transactions or hold underwriting
-permissions. The benchmark-derived thresholds and Anthropic credential remain
-deliberately incomplete until the corpus is built: the API key is present, but
-the model ID and benchmark/runtime controls are not. The agent refuses rather
-than inventing a price when required evidence or configuration is unavailable.
+permissions. The 229-scenario corpus is assembled and scored, but its confidence
+signal failed calibration: no confidence threshold is claimed. The configured
+provider is selected explicitly with `PRICING_MODEL_PROVIDER` and can be
+Anthropic or Gemini; both paths share the same validation and refusal gates.
+The Anthropic path has been exercised live. The Gemini adapter is build- and
+unit-tested but has not been charged with a live request here. The benchmark
+was run against `claude-sonnet-5` at low effort, so those scores do not
+calibrate a different provider or model. The agent refuses rather than
+inventing a price when required evidence or configuration is unavailable.
+
+### Calibration result: negative by design
+
+The committed corpus contains 229 cited scenarios: 148 incidents from `rekt.news`
+and 81 judged-valid Code4rena findings. Of 229 rows, 228 scored. The confidence
+signal was not monotonic: stated confidence averaged about 39% while observed
+accuracy was about 99% in every confidence bin. That accuracy was then shown to be
+an artifact of the benchmark construction. Naming the protocol scored 17/20 with
+no evidence, anonymising it reduced that to 12/20, and retrieval restored 54/54
+accuracy while 99.8% of retrieved neighbours shared the scenario's label.
+
+This corpus therefore cannot produce the §5.4 operating threshold. No value is
+presented as calibrated, and no live quote has been issued. The measured
+disagreement and uncertainty distributions are published in
+[`bench/threshold-derivation.md`](bench/threshold-derivation.md), but they are
+not risk-calibrated limits. A new calibration corpus needs negatives drawn from
+the same source and vocabulary as its positives.
 
 ### Adverse selection controls
 
@@ -232,9 +254,9 @@ end against a real dependency on a real chain.
 | `AaveV3Venue` | Written; **passing against forked X Layer mainnet with real Aave** |
 | `ClaimResolver` | Written; **full payout passing against forked mainnet with real Aave**; bounded-cadence sampling now enforced |
 | `xCoverVault` | Written; covered deposit and every refusal path unit tested; direct share transfers disabled until atomic position transfer exists |
-| Pricing agent | Scaffolded and unit-tested; live corpus/model run still pending |
-| Benchmark corpus and calibration | Not started |
-| Frontend | Not started |
+| Pricing agent | Implemented; 11 unit tests passing; live cited assessment path proven; no quote claimed |
+| Benchmark corpus and calibration | 229 cited rows assembled and scored; calibration result negative, no threshold derived |
+| Frontend | Not started; next slice is a read-only `apps/web` dashboard over live RPC data |
 | Deployment scripts | Written; shared wiring, mainnet gated on the testnet record existing |
 | **X Layer testnet (1952)** | **Corrected deployment and lifecycle proof complete** at block 38581492; a 2,500 tUSDT deficit paid 2,500 tUSDT pro rata. See [`docs/deployments.md`](docs/deployments.md) |
 | X Layer mainnet (196) | Not deployed |

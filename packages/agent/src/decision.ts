@@ -7,9 +7,9 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { assess } from "./assess.js";
 import { canonicalJson, hashCanonicalJson } from "./canonical.js";
 import { retrieveEvidence, type CorpusEntry } from "./evidence.js";
+import { assessmentRunnerFor, type AssessmentRunner } from "./model.js";
 import type {
   AgentConfig,
   Assessment,
@@ -22,13 +22,7 @@ import type {
   SignedDecision,
 } from "./types.js";
 
-export type AssessmentRunner = (
-  apiKey: string,
-  model: string,
-  framing: string,
-  state: ChainState,
-  evidence: import("./types.js").Evidence[],
-) => Promise<Assessment>;
+export type { AssessmentRunner } from "./model.js";
 
 const RAY = 1_000_000_000_000_000_000_000_000_000n;
 const BPS = 10_000n;
@@ -238,22 +232,23 @@ export async function makeDecision(
   corpus: CorpusEntry[],
   coverAmount: bigint,
   nonce = BigInt(`0x${randomBytes(16).toString("hex")}`),
-  assessmentRunner: AssessmentRunner = assess,
+  assessmentRunnerOverride?: AssessmentRunner,
 ): Promise<SignedDecision> {
   if (coverAmount <= 0n) throw new Error("cover amount must be greater than zero");
   const evidence = retrieveEvidence(corpus, state);
   let assessments: [Assessment, Assessment] | null = null;
   let assessmentFailure: string | null = null;
-  if (!config.anthropicApiKey) {
+  if (!config.modelApiKey) {
     assessmentFailure = "model_credentials_missing";
-  } else if (!config.anthropicModel) {
+  } else if (!config.modelName) {
     assessmentFailure = "model_configuration_missing";
   } else if (evidence.length === 0) {
     assessmentFailure = null;
   } else {
+    const assessmentRunner = assessmentRunnerOverride ?? assessmentRunnerFor(config.modelProvider);
     const results = await Promise.allSettled([
-      assessmentRunner(config.anthropicApiKey, config.anthropicModel, "Analyse historical hazard first; be conservative about extrapolating across deployments.", state, evidence),
-      assessmentRunner(config.anthropicApiKey, config.anthropicModel, "Stress-test the first framing; search for missing facts and reasons not to commit capital.", state, evidence),
+      assessmentRunner(config.modelApiKey, config.modelName, "Analyse historical hazard first; be conservative about extrapolating across deployments.", state, evidence),
+      assessmentRunner(config.modelApiKey, config.modelName, "Stress-test the first framing; search for missing facts and reasons not to commit capital.", state, evidence),
     ]);
     if (results[0].status === "fulfilled" && results[1].status === "fulfilled") {
       assessments = [results[0].value, results[1].value];

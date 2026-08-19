@@ -45,14 +45,14 @@ X Layer testnet at block 38581492. Mainnet remains undeployed.
 | Deficit trigger on testnet | **Proven on chain.** Trigger 1 paid 2,500 tUSDT pro rata above the 50 bp floor; policy state is `Paid`, pool capital is 97,500 tUSDT and outstanding cover is zero. |
 | X Layer mainnet (196) | Not deployed. Deployer balance is zero there; funding still owed. |
 | Deficit trigger | **Fixed and proven.** Pays pro-rata above a 50 bp floor. Unit, live-fork and corrected testnet lifecycle evidence cover dust rejection, both sides of the floor, pro-rata payout, smallest-share-in-window, empty reserve, rounding and trigger precedence. |
-| Threshold derivation | **Started for contract terms only.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound. Pricing-agent confidence and runtime controls are not yet derived; provenance is in `docs/pricing-agent.md`. |
-| Pricing agent | Scaffolded in `packages/agent`; **11 unit tests passing**, covering signing, canonical replay hashing, the two-pass gate/refusal path, fourteen named gate reasons, evidence citation, and environment pairing. The assessment call now runs on the official SDK against `claude-opus-5` and has been **exercised end to end against the live API**. Corpus and reviewed runtime controls remain pending, so no quote is claimed. |
+| Threshold derivation | **Negative for the current corpus.** `bench/threshold-derivation.md` records the 50 bp deficit floor and the $0.97 depeg bound; the pricing-agent confidence signal is not monotonic, so no confidence threshold is derived. Remaining runtime values are operator/review parameters. |
+| Pricing agent | Implemented in `packages/agent`; **11 unit tests passing**, covering signing, canonical replay hashing, the two-pass gate/refusal path, fourteen named gate reasons, evidence citation, and environment pairing. The assessment call runs on the official SDK against the currently configured `claude-opus-5` and has been **exercised end to end against the live API**. No quote is claimed because the configured confidence threshold has no calibration-derived value and the corrected testnet venue has a residual deficit. |
 | Benchmark corpus | **Assembled — 229 rows, every citation fetched and checked.** 148 incidents cited to `rekt.news`, 81 judged-valid audit findings cited to Code4rena issues, 156 distinct protocols. Method, provenance and stated weaknesses in `bench/README.md`. |
 | Benchmark scoring | **Complete, and the result is negative.** 228 of 229 scored. Confidence failed calibration: accuracy is flat at ~99% across every stated-confidence bin, stated 39% against 99% observed, not monotonic. Three controls then showed every route to that accuracy is an artifact — naming the protocol leaks the outcome (17/20 with no evidence), anonymising fixes that (12/20), and retrieval then leaks it instead (99.8% of retrieved neighbours share the scenario's label). See `bench/threshold-derivation.md`. |
 | Confidence threshold | **Not derived, and not derivable from this corpus.** `PRICING_CONFIDENCE_THRESHOLD_BPS` has no measured value; any value placed there is an operator choice and must be labelled as one. The spec's sentence — *the threshold was not chosen, it was measured* — must not be written about this system yet. |
 | Disagreement / uncertainty bounds | **Measured across 228 scenarios.** Disagreement mean 993 bp, p90 2,000 bp, max 3,000 bp. Uncertainty loading mean 4,532 bp, p90 6,000 bp, max 7,000 bp. Usable as reviewed bounds if described as distributions of this model's output, not as risk-calibrated limits. |
 | API budget | **$9.00 spent, of which ~$4 was avoidable** — a full run was launched on a cost projected from a no-evidence control, understating it by more than half. Measured rates and the rule against cross-projecting are in `bench/README.md`. |
-| Frontend | Not started |
+| Frontend | **Not started.** Next safe slice: a read-only dashboard in `apps/web` that reads live RPC state, exposes the testnet evidence, and marks mainnet as not deployed; it must have no transaction-writing path. |
 | X account | Not created |
 
 The day-one verification has been executed against live X Layer mainnet,
@@ -61,9 +61,11 @@ corrected contract set has completed the deposit, refusal, bounded observation,
 deficit trigger and payout lifecycle on X Layer testnet. The Aave integration
 remains fork-proven until the mainnet deployment happens.
 
-**The contract correctness and testnet evidence work is currently caught up. What
-remains is the submission pipeline:** pricing agent, benchmark corpus, funded
-mainnet deployment, and presentation. See
+**The contract correctness, pricing-agent evidence, and benchmark evidence are
+currently caught up.** The read-only presentation remains to be built. What
+also remains is the operator-controlled deployment and external submission work:
+reviewed runtime parameters, funded mainnet deployment, demo video, X account and
+first build post. See
 `HANDOFF.md` §6 for the exact continuation order.
 
 ## Settled by chain verification
@@ -104,16 +106,16 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
    put in `PRICING_CONFIDENCE_THRESHOLD_BPS` to let the agent start must be
    described as an operator choice in `.env.example`, `docs/pricing-agent.md` and
    the README.
-3. **Write the README section on the negative result.** It is the strongest
-   quantitative claim available: the confidence signal was measured, it failed,
-   and the benchmark's own weaknesses were measured and published. State plainly
-   that no live quote has been issued.
+3. **Keep the published result honest.** The README now records the negative
+   calibration result: the confidence signal failed and the benchmark's own
+   weaknesses were measured and published. No live quote has been issued.
 4. The corrected testnet venue has a non-zero deficit from the completed payout
    lifecycle, so the agent must refuse there until a clean eligible venue exists.
 5. Fund mainnet, rerun `VerifyIntegration.s.sol`, deploy with `DeployMainnet.s.sol`,
    verify roles/oracle/venue/terms on chain, and commit the mainnet record only
    after the corrected testnet record is present.
-6. Finish the frontend, README figures, demo video, X account and first build post.
+6. Build the read-only `apps/web` demo, then finish the demo video, X account and
+   first build post.
 
 ---
 
@@ -133,10 +135,11 @@ Full evidence in `docs/chain-verification.md`. The decisions these force:
 
 ## Blocked
 
-No code blocker remains in the verified batch. The pricing-agent scaffold is
-implemented and its corpus exists, but scoring is **blocked on Anthropic API
-credit** (`credit balance is too low`), so no gate threshold is derived yet;
-mainnet is blocked on deployer funding and gas.
+No code blocker remains in the verified batch. The pricing agent and corpus are
+implemented, but the current corpus produced no calibration-derived confidence
+threshold; further spending on the same corpus will not change that result.
+Mainnet is blocked on deployer funding and gas. The corrected testnet venue is
+also intentionally ineligible because its proven payout left a non-zero deficit.
 
 Note for pushing from this codespace: the ambient `GITHUB_TOKEN` is refused for
 git pushes to xCover and takes precedence over the working credentials in
@@ -169,6 +172,7 @@ the refusal path, the testnet→mainnet sequence.
 | 17 Aug 2026 | Correctness batch completed in source: fixed Aave oracle/aToken wiring, disabled unsafe independent policy/share transfers, enforced full-window bounded-cadence observations, fixed zero-capital share epochs, and set the next testnet demo floor to 5,000 bp. Full suite: 139 passing; live fork: 10 passing. |
 | 18 Aug 2026 | Built the 229-row cited corpus and scored it in full. The confidence signal failed calibration — accuracy flat at ~99% across every bin, stated 39% against 99% observed, not monotonic — so no threshold is derived. Three controls then established that the accuracy itself is an artifact: naming the protocol scored 17/20 with no evidence at all, anonymising dropped it to 12/20, and with retrieval restored 99.8% of retrieved neighbours carried the scenario's own label, so 54/54 was label propagation. The cause is structural — the two halves come from different sources written in different vocabulary — and is recorded in `bench/README.md` with the measured cost model. $9.00 spent, ~$4 of it avoidable through a bad cost projection. Handover written to `HANDOFF.md` §4a. |
 | 18 Aug 2026 | Audited the pricing agent against the live API and found it could never have quoted: the configured `claude-3-5-sonnet-20241022` returns HTTP 404 for this key, and the hand-rolled request also sent `temperature`, which the current models reject. Both faults surfaced only as a refusal, which is a correct outcome here and so hid them. Moved the call to the official SDK on `claude-opus-5` with adaptive thinking, dropped the sampling parameters, and ran a full assessment end to end against the live API. The run exposed a third fault: the model cited `live-chain-state` for facts read from the chain and the citation validator rejected the whole assessment — that id is now reserved, named in the prompt, and refused to the corpus. Also paired the viem chain descriptor to the environment, made replay lookup case-insensitive, and added six tests including a fourteen-reason gate table. 11 agent tests and 129 off-fork contract tests passing; the two new absence assertions were mutation-checked. |
+| 18 Aug 2026 | Reconciled stale public status after the benchmark and agent work. Confirmed the corpus is complete but calibration is negative, confirmed the current Anthropic key exposes Opus 5/Sonnet 5 rather than Claude 3.5, and updated README, PROGRESS, CLAUDE.md, and agent documentation. No dashboard files were created yet; the next code slice is the read-only `apps/web` presentation, followed by a funded mainnet preflight. |
 | 18 Aug 2026 | Broadcast corrected testnet set at block 38581492 and merged seven creation transaction hashes into the deployment record. Completed the live lifecycle: policy #1, signed refusal, 2,500 tUSDT induced deficit, five observations at 20-block gaps, trigger 1 (`ReserveDeficit`), and 2,500 tUSDT settlement. Direct reads confirmed policy `Paid`, pool capital 97,500 tUSDT, outstanding cover 0, and venue balance 7,500 tUSDT against 10,000 owed. |
 
 Update this table at the end of every session (§1.3).

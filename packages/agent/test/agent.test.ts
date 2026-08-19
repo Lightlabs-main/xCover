@@ -1,15 +1,17 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { AssessmentError, LIVE_STATE_EVIDENCE_ID, __test as assessTest } from "../src/assess.js";
+import { assessAnthropic, AssessmentError, LIVE_STATE_EVIDENCE_ID, __test as assessTest } from "../src/assess.js";
 import { canonicalJson, hashCanonicalJson } from "../src/canonical.js";
 import { loadCorpus } from "../src/evidence.js";
+import { assessGemini } from "../src/gemini.js";
+import { assessmentRunnerFor } from "../src/model.js";
 import { MemoryDecisionStore } from "../src/store.js";
-import { assertDeploymentPair, ConfigError } from "../src/config.js";
+import { assertDeploymentPair, ConfigError, loadConfig } from "../src/config.js";
 import { makeDecision, __test as decisionTest } from "../src/decision.js";
 import type { AgentConfig, Assessment, ChainState, DeploymentRecord, Evidence } from "../src/types.js";
 
@@ -36,13 +38,14 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     chainId: 1952,
     rpcUrl: "https://example.invalid",
     deployment: deployment("testnet"),
+    modelProvider: "anthropic",
+    modelApiKey: "test-key",
+    modelName: "test-model",
     pricerPrivateKey: privateKey,
     engineVersion: "pricing-test/xlayer-usdt",
     quoteValidityBlocks: 20n,
     corpusPath: "unused",
     decisionStorePath: "unused",
-    anthropicApiKey: "test-key",
-    anthropicModel: "test-model",
     pricing: {
       confidenceThresholdBps: 7_000n,
       maxEnsembleDisagreementBps: 500n,
@@ -125,8 +128,40 @@ test("environment pairing rejects the wrong venue before startup", () => {
   assert.doesNotThrow(() => assertDeploymentPair("testnet", deployment("testnet")));
 });
 
+test("provider selection routes Anthropic and Gemini explicitly", () => {
+  assert.equal(assessmentRunnerFor("anthropic"), assessAnthropic);
+  assert.equal(assessmentRunnerFor("gemini"), assessGemini);
+});
+
+test("configuration selects Gemini credentials without reading Anthropic credentials", () => {
+  const root = mkdtempSync(join(tmpdir(), "xcover-config-"));
+  mkdirSync(join(root, "deployments"));
+  writeFileSync(join(root, "deployments", "xlayer-testnet.json"), JSON.stringify(deployment("testnet")));
+  const loaded = loadConfig({
+    XCOVER_ENVIRONMENT: "testnet",
+    XLAYER_TESTNET_RPC: "https://example.invalid",
+    PRICING_MODEL_PROVIDER: "gemini",
+    GEMINI_API_KEY: "gemini-key",
+    GEMINI_MODEL: "gemini-test-model",
+    PRICER_PRIVATE_KEY: privateKey,
+    PRICING_ENGINE_VERSION: "pricing-test/xlayer-usdt",
+    PRICING_CONFIDENCE_THRESHOLD_BPS: "7000",
+    PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS: "500",
+    PRICING_MAX_UNCERTAINTY_LOADING_BPS: "2000",
+    PRICING_CAPITAL_COST_MARGIN_BPS: "100",
+    PRICING_ORACLE_MAX_AGE_SECONDS: "3600",
+    PRICING_ORACLE_MAX_DEVIATION_BPS: "100",
+    PRICING_DEPEG_LOWER_BOUND_8DP: "97000000",
+    PRICING_MAX_PREMIUM_RATE_RAY: "1000000000000000000000000000",
+    QUOTE_TTL_BLOCKS: "20",
+  }, root);
+  assert.equal(loaded.modelProvider, "gemini");
+  assert.equal(loaded.modelApiKey, "gemini-key");
+  assert.equal(loaded.modelName, "gemini-test-model");
+});
+
 test("missing model evidence produces a signed first-class refusal", async () => {
-  const refusalConfig = config({ anthropicApiKey: undefined, anthropicModel: undefined });
+  const refusalConfig = config({ modelApiKey: undefined, modelName: undefined });
   const result = await makeDecision(refusalConfig, state(), [], 50_000n, 1n);
 
   assert.equal(result.document.verdict, "DECLINE_TO_QUOTE");
@@ -197,6 +232,20 @@ test("an assessment may cite live chain state but not an invented source", () =>
     ),
     (error: unknown) => error instanceof AssessmentError,
   );
+});
+
+test("Gemini-shaped decimal-string output passes the common assessment validator", () => {
+  const parsed = assessTest.parseResponse({
+    baseHazardPpmPerBlock: "10",
+    uncertaintyLoadingBps: "100",
+    confidenceBps: "9000",
+    hazardFactors: [{ name: "deficit", severityBps: "100", rationale: "read at the block", evidenceIds: [LIVE_STATE_EVIDENCE_ID] }],
+    concerns: [],
+    missingFacts: [],
+    conclusions: [{ text: "Bounded.", evidenceIds: [LIVE_STATE_EVIDENCE_ID] }],
+  }, "framing", "gemini-2.5-flash-lite", []);
+  assert.equal(parsed.baseHazardPpmPerBlock, 10n);
+  assert.equal(parsed.confidenceBps, 9_000n);
 });
 
 test("the prompt names every permitted evidence id", () => {

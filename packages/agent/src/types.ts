@@ -2,6 +2,8 @@ import type { Address, Hex } from "viem";
 
 export type Environment = "testnet" | "mainnet";
 
+export type ModelProvider = "anthropic" | "gemini";
+
 export type DeploymentRecord = {
   asset: Address;
   chainId: number;
@@ -18,13 +20,14 @@ export type AgentConfig = {
   chainId: number;
   rpcUrl: string;
   deployment: DeploymentRecord;
+  modelProvider: ModelProvider;
+  modelApiKey?: string;
+  modelName?: string;
   pricerPrivateKey: Hex;
   engineVersion: string;
   quoteValidityBlocks: bigint;
   corpusPath: string;
   decisionStorePath: string;
-  anthropicApiKey?: string;
-  anthropicModel?: string;
   pricing: {
     confidenceThresholdBps: bigint;
     maxEnsembleDisagreementBps: bigint;

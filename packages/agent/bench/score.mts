@@ -16,6 +16,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { LIVE_STATE_EVIDENCE_ID } from "../src/assess.js";
+import { generateGeminiJson } from "../src/gemini.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -40,8 +41,26 @@ const balanced = "balanced" in args;
 const effort = (args.effort ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
 const concurrency = Number(args.concurrency ?? 6);
 const out = resolve(root, args.out ?? "bench/data/scores.jsonl");
-const model = process.env.ANTHROPIC_MODEL!;
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!, timeout: 300_000, maxRetries: 3 });
+const provider = process.env.PRICING_MODEL_PROVIDER ?? "anthropic";
+if (provider !== "anthropic" && provider !== "gemini") {
+  throw new Error("PRICING_MODEL_PROVIDER must be anthropic or gemini");
+}
+function requiredValue(value: string | undefined, name: string): string {
+  const normalized = value?.trim();
+  if (!normalized) throw new Error(`${name} is required`);
+  return normalized;
+}
+const apiKey = requiredValue(
+  provider === "gemini" ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY,
+  provider === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY",
+);
+const model = requiredValue(
+  provider === "gemini" ? process.env.GEMINI_MODEL : process.env.ANTHROPIC_MODEL,
+  provider === "gemini" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL",
+);
+const client = provider === "anthropic"
+  ? new Anthropic({ apiKey, timeout: 300_000, maxRetries: 3 })
+  : null;
 
 const corpus: Row[] = readFileSync(resolve(root, "bench/data/corpus.jsonl"), "utf8")
   .split("\n").filter(Boolean).map((l) => JSON.parse(l) as Row);
@@ -135,6 +154,47 @@ function prompt(framing: string, scenario: Row, evidence: ReturnType<typeof retr
   ].join("\n\n");
 }
 
+const BENCHMARK_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["lossLikelihoodBps", "confidenceBps", "uncertaintyLoadingBps", "hazardFactors", "concerns", "missingFacts", "conclusions"],
+  properties: {
+    lossLikelihoodBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+    confidenceBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+    uncertaintyLoadingBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+    hazardFactors: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "severityBps", "rationale", "evidenceIds"],
+        properties: {
+          name: { type: "string" },
+          severityBps: { type: "string", description: "Decimal integer from 0 through 10000." },
+          rationale: { type: "string" },
+          evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
+        },
+      },
+    },
+    concerns: { type: "array", items: { type: "string" } },
+    missingFacts: { type: "array", items: { type: "string" } },
+    conclusions: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "evidenceIds"],
+        properties: {
+          text: { type: "string" },
+          evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
+        },
+      },
+    },
+  },
+} as const;
+
 const int = (v: unknown, field: string): number => {
   if (typeof v === "number" && Number.isSafeInteger(v)) return v;
   if (typeof v === "string" && /^\d+$/.test(v)) return Number(v);
@@ -142,16 +202,25 @@ const int = (v: unknown, field: string): number => {
 };
 
 async function pass(framing: string, scenario: Row, evidence: ReturnType<typeof retrieve>) {
-  const response = await client.messages.create({
-    model, max_tokens: 16_000, thinking: { type: "adaptive" },
-    output_config: { effort },
-    messages: [{ role: "user", content: prompt(framing, scenario, evidence) }],
-  });
-  if (response.stop_reason === "refusal") throw new Error("model declined");
-  if (response.stop_reason === "max_tokens") throw new Error("truncated before completing");
-  const text = response.content.find((b) => b.type === "text")?.text;
-  if (!text) throw new Error("no text block");
-  const raw = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")) as Record<string, unknown>;
+  let raw: Record<string, unknown>;
+  let usage: { input: number; output: number };
+  if (provider === "gemini") {
+    const response = await generateGeminiJson(apiKey, model, prompt(framing, scenario, evidence), BENCHMARK_RESPONSE_SCHEMA);
+    raw = response.value as Record<string, unknown>;
+    usage = { input: response.inputTokens, output: response.outputTokens };
+  } else {
+    const response = await client!.messages.create({
+      model, max_tokens: 16_000, thinking: { type: "adaptive" },
+      output_config: { effort },
+      messages: [{ role: "user", content: prompt(framing, scenario, evidence) }],
+    });
+    if (response.stop_reason === "refusal") throw new Error("model declined");
+    if (response.stop_reason === "max_tokens") throw new Error("truncated before completing");
+    const text = response.content.find((b) => b.type === "text")?.text;
+    if (!text) throw new Error("no text block");
+    raw = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")) as Record<string, unknown>;
+    usage = { input: response.usage.input_tokens, output: response.usage.output_tokens };
+  }
   const known = new Set([...evidence.map((e) => e.id), LIVE_STATE_EVIDENCE_ID]);
   const cited = evidence.length === 0 ? [LIVE_STATE_EVIDENCE_ID] : [
     ...(raw.hazardFactors as Array<{ evidenceIds: string[] }> ?? []),
@@ -165,7 +234,7 @@ async function pass(framing: string, scenario: Row, evidence: ReturnType<typeof 
     uncertaintyLoadingBps: int(raw.uncertaintyLoadingBps, "uncertaintyLoadingBps"),
     missingFacts: (raw.missingFacts as string[]) ?? [],
     // Recorded so a run's cost is read off the run instead of estimated before it.
-    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
+    usage,
   };
 }
 
@@ -191,7 +260,7 @@ async function scoreOne(scenario: Row) {
     ),
     uncertaintyLoadingBps: Math.round((a.uncertaintyLoadingBps + b.uncertaintyLoadingBps) / 2),
     missingFactCount: new Set([...a.missingFacts, ...b.missingFacts]).size,
-    model, effort, noEvidence,
+    provider, model, effort, noEvidence,
     inputTokens: a.usage.input + b.usage.input,
     outputTokens: a.usage.output + b.usage.output,
     passes: [a, b],
@@ -244,7 +313,7 @@ const RATES: Record<string, { input: number; output: number }> = {
   "claude-opus-5": { input: 5, output: 25 },
   "claude-sonnet-5": { input: 2, output: 10 }, // introductory rate through 2026-08-31
 };
-const rate = RATES[model];
+const rate = provider === "anthropic" ? RATES[model] : undefined;
 const priced = readFileSync(out, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
   .filter((r: { inputTokens?: number }) => typeof r.inputTokens === "number");
 if (rate && priced.length > 0) {
@@ -258,4 +327,8 @@ if (rate && priced.length > 0) {
       ? " — no projection: these prompts carry no evidence and cost a fraction of a real run"
       : `, $${((spent / priced.length) * corpus.length).toFixed(2)} projected for all ${corpus.length}`),
   );
+} else if (provider === "gemini" && priced.length > 0) {
+  const input = priced.reduce((t: number, r: { inputTokens: number }) => t + r.inputTokens, 0);
+  const output = priced.reduce((t: number, r: { outputTokens: number }) => t + r.outputTokens, 0);
+  console.error(`usage over ${priced.length} scenarios (gemini/${model}, effort=${effort}): ${input} in / ${output} out; provider pricing is not estimated by this harness`);
 }

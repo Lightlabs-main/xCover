@@ -134,6 +134,13 @@ Lexical retrieval therefore returns a same-class neighbourhood essentially every
 amount of holding out protocols, anonymising fields, or re-running fixes that, because the
 separability is in the source material.
 
+The scoring harness supports both explicit providers with
+`PRICING_MODEL_PROVIDER=anthropic` or `PRICING_MODEL_PROVIDER=gemini`, selecting the
+matching key/model variables. Gemini uses structured JSON output and records token usage;
+the harness does not estimate Gemini spend. Scores remain provider- and model-specific:
+switching providers does not repair this corpus or turn its existing scores into a
+calibration result.
+
 **What a usable corpus needs: negatives drawn from the same source type and written in the
 same words as the positives.** For example, protocols with a comparable profile over a
 comparable period that were not exploited, described in the same terms as the ones that

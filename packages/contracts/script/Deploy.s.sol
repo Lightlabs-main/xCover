@@ -19,7 +19,7 @@ import {IYieldVenue} from "../src/interfaces/IYieldVenue.sol";
 ///
 /// @dev **Why one base and two thin entry points.** The role table below is the whole system: get
 ///      one grant wrong and either nothing works or something works that must not. Writing it twice
-///      — once for testnet, once for mainnet — would mean the mainnet deployment is wired by code
+///      - once for testnet, once for mainnet - would mean the mainnet deployment is wired by code
 ///      that has never been exercised, while the testnet run that *was* exercised proves nothing
 ///      about it. Here the only thing that differs between networks is the venue, the asset, and
 ///      the parameter set; the wiring is executed identically by both.
@@ -89,7 +89,7 @@ abstract contract DeployBase is Script {
         d.vault = address(vault);
 
         // --- roles ------------------------------------------------------------------------
-        // This is the table in HANDOFF.md §4. Every grant here is the minimum that makes one
+        // This is the role table in docs/SPEC.md. Every grant here is the minimum that makes one
         // specific call path work, and nothing holds a role it does not need.
         pool.grantRole(pool.VAULT_ROLE(), address(policy)); // reserve/release cover
         pool.grantRole(pool.CLAIM_ROLE(), address(resolver)); // pay a settled claim
@@ -164,7 +164,7 @@ abstract contract DeployBase is Script {
     ///
     ///      **Only a real broadcast writes it.** A simulation produces addresses that look exactly
     ///      like deployed ones and are not, so a dry run that wrote this file would manufacture
-    ///      evidence of a deployment that never happened — and would satisfy the ordering gate in
+    ///      evidence of a deployment that never happened - and would satisfy the ordering gate in
     ///      `DeployMainnet` on the strength of it. The record is a claim about the chain, so only an
     ///      action against the chain may make it.
     function _writeRecord(string memory network, Deployment memory d, IYieldVenue venue) internal {

@@ -1,5 +1,6 @@
 import { assessAnthropic } from "./assess.js";
 import { assessGemini } from "./gemini.js";
+import { assessRouter } from "./router.js";
 import type { Assessment, ChainState, Evidence, ModelProvider } from "./types.js";
 
 export type AssessmentRunner = (
@@ -11,5 +12,7 @@ export type AssessmentRunner = (
 ) => Promise<Assessment>;
 
 export function assessmentRunnerFor(provider: ModelProvider): AssessmentRunner {
-  return provider === "gemini" ? assessGemini : assessAnthropic;
+  if (provider === "gemini") return assessGemini;
+  if (provider === "alibaba") return assessRouter;
+  return assessAnthropic;
 }

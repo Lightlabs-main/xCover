@@ -75,7 +75,6 @@ function stateDocument(state: ChainState): Record<string, unknown> {
           liquidationThresholdBps: state.reserveConfiguration.liquidationThresholdBps.toString(),
           isActive: state.reserveConfiguration.isActive,
           isFrozen: state.reserveConfiguration.isFrozen,
-          isPaused: state.reserveConfiguration.isPaused,
         }
       : null,
     oracleFeed: state.oracleFeed
@@ -169,7 +168,7 @@ function gate(
   if (state.totalSupplied === 0n) reasons.push("reserve_has_no_supply");
   if (state.utilizationBps !== null && state.utilizationBps > BPS) reasons.push("utilization_above_100pct");
   if (state.poolCapital < state.poolOutstandingCover + coverAmount) reasons.push("pool_capacity_insufficient");
-  if (state.reserveConfiguration && (!state.reserveConfiguration.isActive || state.reserveConfiguration.isFrozen || state.reserveConfiguration.isPaused)) {
+  if (state.reserveConfiguration && (!state.reserveConfiguration.isActive || state.reserveConfiguration.isFrozen)) {
     reasons.push("reserve_not_active");
   }
   if (state.oraclePrice === 0n) reasons.push("oracle_price_zero");
@@ -213,6 +212,17 @@ function computationDocument(value: Computation): ComputationDocument {
   };
 }
 
+function zeroComputationDocument(): ComputationDocument {
+  return {
+    baseHazardPpmPerBlock: "0",
+    utilizationMultiplierBps: "0",
+    concentrationMultiplierBps: "0",
+    uncertaintyMultiplierBps: "0",
+    capitalCostMultiplierBps: "0",
+    premiumRateRay: "0",
+  };
+}
+
 const decisionTypes = {
   Decision: [
     { name: "reserve", type: "address" },
@@ -226,6 +236,41 @@ const decisionTypes = {
   ],
 } as const;
 
+async function signDecision(
+  config: AgentConfig,
+  state: ChainState,
+  coverAmount: bigint,
+  nonce: bigint,
+  document: DecisionDocument,
+  premiumRateRay: bigint,
+): Promise<SignedDecision> {
+  const canonical = canonicalJson(document);
+  const decisionHash = hashCanonicalJson(document);
+  const declined = document.verdict === "DECLINE_TO_QUOTE";
+  const validUntilBlock = state.blockNumber + config.quoteValidityBlocks;
+  const decision = {
+    reserve: state.reserve,
+    coverAmount,
+    premiumRateRay: declined ? 0n : premiumRateRay,
+    validUntilBlock,
+    declined,
+    decisionHash,
+    engineVersion: config.engineVersion,
+    nonce,
+  };
+  const account = privateKeyToAccount(config.pricerPrivateKey);
+  const domain = {
+    name: "xCover PricingRegistry",
+    version: "1",
+    chainId: Number(state.chainId),
+    verifyingContract: config.deployment.pricingRegistry,
+  } as const;
+  const quoteHash = hashTypedData({ domain, types: decisionTypes, primaryType: "Decision", message: decision });
+  const signature = await account.signTypedData({ domain, types: decisionTypes, primaryType: "Decision", message: decision });
+  if (keccak256(stringToHex(canonical)) !== decisionHash) throw new Error("decision hash changed during signing");
+  return { quoteHash, decisionHash, decision, signature, canonicalJson: canonical, document };
+}
+
 export async function makeDecision(
   config: AgentConfig,
   state: ChainState,
@@ -235,6 +280,37 @@ export async function makeDecision(
   assessmentRunnerOverride?: AssessmentRunner,
 ): Promise<SignedDecision> {
   if (coverAmount <= 0n) throw new Error("cover amount must be greater than zero");
+
+  if (config.mode === "calibration_in_progress") {
+    const document: DecisionDocument = {
+      schema: "xcover.pricing-decision.v1",
+      mode: "calibration_in_progress",
+      calibration: { status: "in_progress", thresholdDerived: false },
+      engineVersion: config.engineVersion,
+      request: { reserve: state.reserve, coverAmount: coverAmount.toString(), nonce: nonce.toString() },
+      chain: {
+        chainId: state.chainId.toString(),
+        blockNumber: state.blockNumber.toString(),
+        blockTimestamp: state.blockTimestamp.toString(),
+        venueName: state.venueName,
+        hasYieldSource: state.hasYieldSource,
+      },
+      inputs: { chainState: stateDocument(state), evidence: [] },
+      assessments: { passA: null, passB: null, disagreementBps: null },
+      computation: zeroComputationDocument(),
+      gate: {
+        verdict: "DECLINE_TO_QUOTE",
+        reasons: ["calibration_in_progress"],
+        confidenceBps: "0",
+        thresholdBps: "0",
+        ensembleDisagreementBps: null,
+      },
+      verdict: "DECLINE_TO_QUOTE",
+      declineReason: "calibration_in_progress",
+    };
+    return signDecision(config, state, coverAmount, nonce, document, 0n);
+  }
+
   const evidence = retrieveEvidence(corpus, state);
   let assessments: [Assessment, Assessment] | null = null;
   let assessmentFailure: string | null = null;
@@ -271,6 +347,10 @@ export async function makeDecision(
   );
   const document: DecisionDocument = {
     schema: "xcover.pricing-decision.v1",
+    mode: config.mode,
+    calibration: config.mode === "provisional_pricing"
+      ? { status: "in_progress", thresholdDerived: false }
+      : null,
     engineVersion: config.engineVersion,
     request: { reserve: state.reserve, coverAmount: coverAmount.toString(), nonce: nonce.toString() },
     chain: {
@@ -300,32 +380,7 @@ export async function makeDecision(
     verdict: gateResult.verdict,
     declineReason: gateResult.verdict === "DECLINE_TO_QUOTE" ? gateResult.reasons[0] ?? "gate_refused" : null,
   };
-  const canonical = canonicalJson(document);
-  const decisionHash = hashCanonicalJson(document);
-  const declined = gateResult.verdict === "DECLINE_TO_QUOTE";
-  const premiumRateRay = declined ? 0n : computation.premiumRateRay;
-  const validUntilBlock = state.blockNumber + config.quoteValidityBlocks;
-  const decision = {
-    reserve: state.reserve,
-    coverAmount,
-    premiumRateRay,
-    validUntilBlock,
-    declined,
-    decisionHash,
-    engineVersion: config.engineVersion,
-    nonce,
-  };
-  const account = privateKeyToAccount(config.pricerPrivateKey);
-  const domain = {
-    name: "xCover PricingRegistry",
-    version: "1",
-    chainId: Number(state.chainId),
-    verifyingContract: config.deployment.pricingRegistry,
-  } as const;
-  const quoteHash = hashTypedData({ domain, types: decisionTypes, primaryType: "Decision", message: decision });
-  const signature = await account.signTypedData({ domain, types: decisionTypes, primaryType: "Decision", message: decision });
-  if (keccak256(stringToHex(canonical)) !== decisionHash) throw new Error("decision hash changed during signing");
-  return { quoteHash, decisionHash, decision, signature, canonicalJson: canonical, document };
+  return signDecision(config, state, coverAmount, nonce, document, computation.premiumRateRay);
 }
 
 export const __test = { compute, gate, stateDocument, decisionTypes };

@@ -9,7 +9,7 @@ import { ConfigError } from "./config.js";
 import type { AgentConfig, ChainState } from "./types.js";
 
 export const MAINNET_AAVE_DATA_PROVIDER = "0x6C505C31714f14e8af2A03633EB2Cdfb4959138F" as Address;
-export const MAINNET_USDT_PRICE_FEED = "0x7ec7E5497EAf312FE82F8307D05eb0E5f0f157D3" as Address;
+export const MAINNET_AAVE_ORACLE = "0x91FC11136d5615575a0fC5981Ab5C0C54418E2C6" as Address;
 
 const venueAbi = [
   { type: "function", name: "asset", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
@@ -55,8 +55,10 @@ const dataProviderAbi = [
       { name: "liquidityRate", type: "uint256" },
       { name: "variableBorrowRate", type: "uint256" },
       { name: "stableBorrowRate", type: "uint256" },
+      { name: "averageStableBorrowRate", type: "uint256" },
+      { name: "liquidityIndex", type: "uint256" },
+      { name: "variableBorrowIndex", type: "uint256" },
       { name: "lastUpdateTimestamp", type: "uint40" },
-      { name: "id", type: "uint16" },
     ],
   },
   {
@@ -75,26 +77,6 @@ const dataProviderAbi = [
       { name: "stableBorrowRateEnabled", type: "bool" },
       { name: "isActive", type: "bool" },
       { name: "isFrozen", type: "bool" },
-      { name: "isPaused", type: "bool" },
-      { name: "isSiloedBorrowing", type: "bool" },
-      { name: "isBorrowableInIsolation", type: "bool" },
-      { name: "isFlashloanable", type: "bool" },
-    ],
-  },
-] as const;
-
-const priceFeedAbi = [
-  {
-    type: "function",
-    name: "latestRoundData",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [
-      { name: "roundId", type: "uint80" },
-      { name: "answer", type: "int256" },
-      { name: "startedAt", type: "uint256" },
-      { name: "updatedAt", type: "uint256" },
-      { name: "answeredInRound", type: "uint80" },
     ],
   },
 ] as const;
@@ -185,11 +167,14 @@ export async function readChainState(
   const missingFacts: string[] = [];
 
   if (config.environment === "mainnet") {
-    const [reserveData, reserveConfig, feedData] = await Promise.all([
+    const [reserveData, reserveConfig, aggregateOraclePrice] = await Promise.all([
       client.readContract({ address: MAINNET_AAVE_DATA_PROVIDER, abi: dataProviderAbi, functionName: "getReserveData", args: [reserve], ...options }),
       client.readContract({ address: MAINNET_AAVE_DATA_PROVIDER, abi: dataProviderAbi, functionName: "getReserveConfigurationData", args: [reserve], ...options }),
-      client.readContract({ address: MAINNET_USDT_PRICE_FEED, abi: priceFeedAbi, functionName: "latestRoundData", ...options }),
+      client.readContract({ address: MAINNET_AAVE_ORACLE, abi: aaveOracleAbi, functionName: "getAssetPrice", args: [reserve], ...options }),
     ]);
+    if (asBigInt(aggregateOraclePrice, "Aave oracle price") !== asBigInt(oraclePrice, "venue oracle price")) {
+      missingFacts.push("venue and Aave aggregate oracle disagree");
+    }
     const totalAToken = asBigInt(reserveData[2], "totalAToken");
     const stableDebt = asBigInt(reserveData[3], "totalStableDebt");
     const variableDebt = asBigInt(reserveData[4], "totalVariableDebt");
@@ -203,12 +188,6 @@ export async function readChainState(
       reserveFactorBps: asBigInt(reserveConfig[4], "reserve factor"),
       isActive: Boolean(reserveConfig[8]),
       isFrozen: Boolean(reserveConfig[9]),
-      isPaused: Boolean(reserveConfig[10]),
-    };
-    oracleFeed = {
-      answer: BigInt(feedData[1]),
-      updatedAt: asBigInt(feedData[3], "oracle updatedAt"),
-      answeredInRound: asBigInt(feedData[4], "oracle answeredInRound"),
     };
   }
 
@@ -236,5 +215,4 @@ export async function readChainState(
   };
 }
 
-export const __test = { venueAbi, erc20Abi, coverPoolAbi, dataProviderAbi, priceFeedAbi, aaveOracleAbi };
-
+export const __test = { venueAbi, erc20Abi, coverPoolAbi, dataProviderAbi, aaveOracleAbi };

@@ -1,40 +1,42 @@
-# xCover pricing agent
+# xCover AI pricing agent
 
-This service observes the configured X Layer deployment, retrieves matching
-entries from the committed benchmark corpus, asks the configured model provider
-for two cited risk assessments, computes a per-block rate in deterministic code,
-applies refusal gates, and signs a `PricingRegistry.Decision` with EIP-712.
+This package serves the xCover dashboard and pricing API. The AI pricing agent
+reads live X Layer and Aave V3 state, evaluates a covered USDT position, and
+returns a signed price or refusal. It never moves pool funds or settles claims.
 
-Supported providers are `anthropic` (the Anthropic SDK) and `gemini` (Google's
-official `@google/genai` SDK with server-side structured JSON output). Select one
-with `PRICING_MODEL_PROVIDER`; the provider's API key and model are then read
-from the corresponding `ANTHROPIC_*` or `GEMINI_*` variables. Provider selection
-is explicit so a Gemini key cannot be silently ignored by an Anthropic run.
+The service is one part of the product:
 
-The service never submits a transaction and never receives a pool, vault, or
-claim role. A caller submits the returned `decision` and `signature` to
-`PricingRegistry.recordDecision`. Both quotes and refusals are signed and
-replayable at `GET /decision/:hash`.
+- the pricing service prepares the decision;
+- `PricingRegistry` records the decision;
+- `xCoverVault` opens the covered Aave V3 position; and
+- `CoverPool` holds underwriting capital and pays valid claims.
 
-Required runtime configuration is documented in the root `.env.example` and the
-parameter provenance is recorded in [`docs/pricing-agent.md`](../../docs/pricing-agent.md).
-`XCOVER_ENVIRONMENT` is mandatory. The loader reads the matching committed
-deployment record and checks the live venue before opening a route. Pricing
-thresholds are intentionally required configuration. The current corpus was
-scored, but its confidence signal failed calibration; no calibrated confidence
-threshold exists. Any value supplied to start the service is an operator choice
-and must be labelled as such. The existing benchmark used `claude-sonnet-5` at
-low effort and therefore does not calibrate an Opus 5 deployment.
+## Calibration status
 
-From the workspace root, after the corpus and thresholds exist, load `.env` into
-the process environment and select the provider explicitly:
+Pricing calibration is in progress. `provisional_pricing` is the current live
+mode with explicit operating controls. `calibration_in_progress` starts a
+refusal-only service while a new calibration run is prepared. No measured
+confidence threshold is claimed until the evidence supports one.
+
+## Start locally
+
+From the workspace root:
 
 ```bash
+pnpm --filter @xcover/pricing-agent build
 set -a; source .env; set +a
-XCOVER_ENVIRONMENT=testnet PRICING_MODEL_PROVIDER=gemini pnpm --filter @xcover/pricing-agent start
+XCOVER_ENVIRONMENT=mainnet \
+PRICING_MODE=provisional_pricing \
+PRICING_MODEL_PROVIDER=alibaba \
+ALIBABA_MODEL=qwen-3.8-max-free \
+HOST=127.0.0.1 PORT=8787 \
+pnpm --filter @xcover/pricing-agent start
 ```
 
-Request a decision with a decimal base-unit amount:
+Open `http://127.0.0.1:8787/` for the landing page. Select **Open dashboard**
+to connect a wallet and use the transaction flow.
+
+## Decision endpoint
 
 ```bash
 curl -X POST http://127.0.0.1:8787/decision \
@@ -42,6 +44,17 @@ curl -X POST http://127.0.0.1:8787/decision \
   -d '{"coverAmount":"50000000"}'
 ```
 
-The current corrected testnet venue has a residual reserve deficit from the
-completed payout rehearsal. A live request there must therefore return a signed
-`DECLINE_TO_QUOTE` until a clean eligible venue state is available.
+The response contains a canonical decision, signature, and decision hash. The
+dashboard records the accepted decision before it enables a covered deposit.
+Refusals are returned and recorded as decisions; they do not open positions.
+
+## Tests and build
+
+```bash
+pnpm --filter @xcover/pricing-agent test
+pnpm --filter @xcover/pricing-agent build
+```
+
+Runtime settings are described in [`.env.example`](../../.env.example). Pricing
+state and calibration evidence are described in
+[`docs/pricing-agent.md`](../../docs/pricing-agent.md) and [`bench`](../../bench).

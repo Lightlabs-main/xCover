@@ -1,0 +1,34 @@
+{
+  "asset": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+  "aToken": "0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297",
+  "blockNumber": 68445915,
+  "chainId": 196,
+  "claimResolver": "0xecAC3585b8720E4Cb04CF54Af06022805a97f763",
+  "coverPolicy": "0x8CaBB9bD14ad8E2b1d407Fa2f9Afe1a93922628E",
+  "coverPool": "0x9D169a232A70A0375297FAe02A2e325Ab4370764",
+  "deployerAddress": "0xf3c2991bca976c9ecc55c1c1eb8e2fd6e21baae8",
+  "deploymentTxHashes": {
+    "claimResolver": "0x3635aefa678056cd604fc84e5c27d0249746b38f8d0829398d5a4d92fe576a27",
+    "coverPolicy": "0x2f3c00c6fe59d93087b4cb1b7f929c384aea11ebfcc057f3f469d076312bddb9",
+    "coverPool": "0xfdaf025e93fcdcbb9da86635092119f070282540efa0d1d9d1e070f3e8d2fa67",
+    "pricingRegistry": "0x2a0048cafa482579c20d1063deb7d8f6246d760738ced09bded89b009c9a6b82",
+    "venue": "0x915388e3d1da7b18d5b8e41cc46a213e47c8a5c0eed1ce76aa6635a5466e7f98",
+    "xCoverVault": "0xa2646902af0cccdfc38897348040f19acff237d74a3cdf35a18f691bc6136e98"
+  },
+  "explorer": {
+    "asset": "https://www.oklink.com/x-layer/address/0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    "claimResolver": "https://www.oklink.com/x-layer/address/0xecAC3585b8720E4Cb04CF54Af06022805a97f763",
+    "coverPolicy": "https://www.oklink.com/x-layer/address/0x8CaBB9bD14ad8E2b1d407Fa2f9Afe1a93922628E",
+    "coverPool": "https://www.oklink.com/x-layer/address/0x9D169a232A70A0375297FAe02A2e325Ab4370764",
+    "pricingRegistry": "https://www.oklink.com/x-layer/address/0xb6A57100AedB262cb5aCfD748c72052489B78Ea5",
+    "venue": "https://www.oklink.com/x-layer/address/0x5C63E71625C1ABC23A7f1A571e22fcdf1cc20345",
+    "xCoverVault": "https://www.oklink.com/x-layer/address/0x65BbFb3fA98ca6256f55e79Fd043250Da3FdC7C8"
+  },
+  "hasYieldSource": true,
+  "pricingRegistry": "0xb6A57100AedB262cb5aCfD748c72052489B78Ea5",
+  "termsHash": "0x3443d5442ff979c58f12c68ba9ce0208ecc5cd363247488adf2105a38bf04863",
+  "timestamp": 1787214951,
+  "venue": "0x5C63E71625C1ABC23A7f1A571e22fcdf1cc20345",
+  "venueName": "aave-v3/xlayer-mainnet",
+  "xCoverVault": "0x65BbFb3fA98ca6256f55e79Fd043250Da3FdC7C8"
+}

@@ -1,200 +1,69 @@
-# Benchmark corpus
+# Pricing evidence
 
-`data/corpus.jsonl` — 229 labelled protocol-risk scenarios, each carrying a source
-URL that was fetched and checked, not recalled. It is the grounding corpus the
-pricing agent retrieves from (SPEC §5.2 step 2) and the labelled set the
-confidence gate is calibrated against (§5.4).
+This directory contains the evidence used to evaluate xCover pricing. It is an
+engineering record, not user-facing product copy. Raw inputs, outputs, source
+checks, and scoring results remain in the repository so a reviewer can reproduce
+the work.
 
-| | Rows |
-|---|---|
-| `label: "loss"` — an incident that occurred | 148 |
-| `label: "no_loss"` — a valid flaw disclosed, not exploited | 81 |
+## Current status
+
+Pricing calibration is in progress. The main corpus contains 229 labelled
+scenarios with cited source material:
+
+| Measure | Value |
+|---|---:|
+| Scenarios | 229 |
+| Incident scenarios | 148 |
+| Non-incident findings | 81 |
 | Distinct protocols | 156 |
-| Date range | 2020-06-28 → 2026-08-11 |
+| Source date range | 2020-06-28 to 2026-08-11 |
 
-## Where the rows come from, and how they were checked
+The corpus is fully assembled and its source URLs were fetched and checked. The
+current scoring work did not produce a measured confidence threshold. That
+result is preserved in the raw scoring files and
+[`threshold-derivation.md`](threshold-derivation.md).
 
-**Loss rows.** The incident list comes from the DefiLlama hacks dataset
-(`https://api.llama.fi/hacks`), which supplies a date, a reported loss amount, a
-classification and a technique per incident. That dataset carries no per-incident
-citation, so a citation was located for each one on `rekt.news` and **fetched**:
-a missing article answers HTTP 500, so a row exists only where a real article
-answered 200 with a headline. The headline is then checked against the incident
-name — `WOO X` paired with a `Woofi` article was rejected on that basis rather
-than admitted. `tools/build_corpus.py` and `tools/probe.sh` do this; re-running
-them reproduces the file.
+## Evidence rules
 
-**No-loss rows.** Judged-valid high and medium severity findings from public
-Code4rena audit competitions in money-market and stablecoin protocols, pulled
-through the GitHub API, so each row's `sourceUrl` is an addressable issue.
-Findings labelled `unsatisfactory` are excluded. The no-loss label is
-cross-checked rather than assumed: a protocol that appears in the incident
-dataset is not a clean negative and is dropped. That check removed Revert Lend
-and Wise Lending, both of which were later exploited.
+- Each scenario keeps an addressable source URL.
+- The scenario under test is removed from retrieval before scoring.
+- Labels, outcomes, and loss amounts are not shown to the pricing service as
+  hidden answer fields.
+- Incident and non-incident sources are checked separately because they use
+  different language and describe different evidence.
+- A source that stops resolving is removed rather than silently retained.
 
-## Limits of this corpus, stated plainly
+## Corpus construction
 
-- **The loss rows' text is assembled from dataset fields plus the cited
-  headline.** Each article was fetched and confirmed to exist and to be about the
-  named protocol; each was not read end to end and paraphrased. The row asserts
-  only what the dataset and the headline support.
-- **The no-loss rows are audit findings.** That is one specific way a risk can
-  fail to become a loss — disclosed rather than exploited. It is *not* the same
-  as a market situation that looked dangerous and resolved safely (a depeg that
-  recovered, a market frozen in time). Those are the weaker part of the corpus
-  and the calibration report must not claim otherwise.
-- **Loss amounts are as reported by DefiLlama**, and reported figures for
-  exploits are frequently revised.
-- **Class balance is 65/35 toward losses.** Accuracy must therefore be read
-  alongside refusal precision, never on its own.
+Loss rows begin with the public incident dataset and are checked against an
+addressable incident report. Non-incident rows come from public audit findings
+that were reviewed as valid findings without a recorded loss in the checked
+material. The construction tools are in `tools/` and the source rows are in
+`data/corpus.jsonl`.
 
-## Leakage rule for scoring
-
-The corpus is both the evidence the model retrieves from and the set it is scored
-on. Scoring a scenario while its own row is retrievable would measure recall of
-the answer, not judgement. Scoring is therefore leave-one-out: the scenario under
-test is removed from the retrievable corpus before its assessment is requested,
-and its `outcome`, `label` and `lossUsd` are never shown to the model.
-
-## Reproducing
+Rebuild the primary corpus with:
 
 ```bash
 curl -sS https://api.llama.fi/hacks -o /tmp/hacks.json
 python3 tools/candidates.py /tmp/hacks.json /tmp/candidates.json
 xargs -a /tmp/slugs.txt -P 8 -I{} tools/probe.sh {} > /tmp/verified.tsv
 python3 tools/build_corpus.py /tmp/verified.tsv /tmp/candidates.json data/corpus.jsonl
-tools/fetch_c4.sh <contest-repos> && python3 tools/build_negatives.py /tmp/c4_findings.jsonl /tmp/candidates.json /tmp/negatives.jsonl
 ```
 
-Citations are live third-party URLs. A row whose source stops resolving is a row
-that has lost its evidence, and should be dropped rather than kept on the
-strength of having once been checked.
+## Preserved records
 
-## Scoring status
+- `data/corpus.jsonl` - primary cited corpus;
+- `data/control-*.jsonl` - no-evidence controls;
+- `data/scores-*.jsonl` - raw scoring output;
+- `data/*-corpus-check.md` - source and leakage checks;
+- `data/*-calibration-status.md` - dated run decisions; and
+- `threshold-derivation.md` - contract and pricing parameter provenance.
 
-A 20-scenario balanced pilot separated the two classes completely — mean loss
-likelihood 8,692 bp against 515 bp, 20 of 20 directionally correct. That is too
-clean to accept at face value. The two halves of this corpus are written in
-different words, and a model that reads the wording rather than the risk would
-produce exactly this result. `bench/score.mts` neutralises the obvious markers
-(`- REKT` suffixes, `Audit finding (…)` classifications) and reduces both halves
-to the same three fields, but narrowing a leak is not the same as closing it.
+Historical run files retain their original names so their checksums and links
+remain stable. They are evidence records, not current product configuration.
 
-The test is the control run — the same scenarios with retrieval disabled
-(`--noEvidence`). If accuracy survives with no evidence to reason from, the
-benchmark is measuring the framing and no accuracy figure from it may be
-published. That run is outstanding: it stopped on an Anthropic API credit limit.
+## Reproducibility requirements
 
-**No gate threshold is derived from this corpus yet, and none should be until
-the control has run.**
-
-## Gemini rebuild history — superseded Code4rena attempt
-
-The separate Code4rena-only candidate is `data/corpus-gemini.jsonl`. It contains 177
-rows across 14 protocol groups: 76 protocol-level loss associations and 101 findings
-from protocols with no incident in the checked snapshot. `data/gemini-corpus-check.md`
-records the offline schema, source-family, prompt-leakage and retrieval checks. The
-weighted retrieval label purity is 53.2%, below the 75% stop gate.
-
-The Gemini smoke call succeeded against `gemini-3.5-flash-lite`, but calibration was
-stopped at the live controls. A 152-row predecessor produced a partial no-evidence
-control with AUC 0.81 before the free-tier quota interrupted it, so it was expanded
-with Sturdy V1 and Tapioca DAO findings. On the revised corpus, six balanced
-no-evidence rows produced AUC 0.33; the same six with evidence produced AUC 0.17.
-Those samples are not calibration evidence, and retrieval did not improve the
-signal. No full Gemini run or confidence threshold is claimed. Full details are in
-`data/gemini-calibration-status.md`.
-
-## Gemini scenario-level rebuild — 19 August 2026
-
-The Code4rena candidate above is not used for calibration. The replacement is
-`data/corpus-gemini-scenario.jsonl`, built from 71 same-source Immunefi case
-articles: 15 articles explicitly describing realized loss and 56 Bug Fix Reviews
-describing responsible disclosure and remediation. The label is taken from the
-scenario article itself; no protocol-to-incident join is used. Mixed labels for a
-protocol are allowed, while the complete protocol and source article are held out
-from retrieval.
-
-The offline preflight passes with 100% retrieval coverage and 73.2% weighted label
-purity using a fixed five-neighbour evidence budget. The live balanced controls then
-completed 20/20 each on `gemini-3.5-flash-lite` (10 loss / 10 no-loss): no-evidence
-AUC 0.635 and 13/20 directional accuracy; evidence AUC 0.615 and 11/20. Because
-evidence did not improve the fixed sample, the gate fails. No full Gemini run and
-no confidence threshold are claimed. Raw outputs and the exact gate decision are
-in `data/gemini-scenario-calibration-status.md`.
-
----
-
-# Result: this corpus cannot support the §5.4 calibration
-
-**Do not run more scoring against this corpus expecting a usable threshold.** Three
-measurements, run 18 August 2026, establish that every route to high accuracy on it is
-an artifact of how it was built. The raw per-scenario output for all three is committed
-alongside this file.
-
-| Experiment | Scenario shows | Evidence retrieved | Accuracy | Data |
-|---|---|---|---|---|
-| 1 | protocol name + date | none | **17/20** | `data/control-sonnet5-low.jsonl` |
-| 2 | era + mechanism only | none | **12/20** | `data/control-anon.jsonl` |
-| 3 | era + mechanism only | 12 entries, whole protocol held out | **54/54** | `data/anon-evidence-60.jsonl` |
-
-Chance is 50%.
-
-**Experiment 1 — the model recognises the protocols.** With every piece of evidence
-removed it still scored 17/20, because it knows Balancer and Yearn were exploited. Naming
-the protocol hands over the answer.
-
-**Experiment 2 — removing the name closes that.** Anonymising the scenario to an era and a
-mechanism drops it to 12/20, which for n=20 is not distinguishable from guessing. Class
-separation collapsed with it: mean loss likelihood went from 7,760/4,115 bp to 5,800/4,475.
-
-**Experiment 3 — but then retrieval hands the answer over instead.** 54/54 looks like
-retrieval doing real work. It is not. **99.8% of the evidence actually retrieved carries
-the scenario's own label** (99.7% for loss rows, 100.0% for no-loss rows), and every row's
-`outcome` field states the answer in words:
-
-```
-loss     ->  "loss of 500,000,000,000 USD"
-no_loss  ->  "disclosed in a public audit competition; no depositor loss recorded"
-```
-
-The model reads twelve neighbours that all say the same thing and copies them. That is
-nearest-neighbour label propagation, not judgement.
-
-## Why this is structural, not a tuning problem
-
-The two halves of the corpus come from different source types — incident write-ups from
-`rekt.news`, audit findings from Code4rena — and they are written in different vocabulary.
-Lexical retrieval therefore returns a same-class neighbourhood essentially every time. No
-amount of holding out protocols, anonymising fields, or re-running fixes that, because the
-separability is in the source material.
-
-The scoring harness supports both explicit providers with
-`PRICING_MODEL_PROVIDER=anthropic` or `PRICING_MODEL_PROVIDER=gemini`, selecting the
-matching key/model variables. Gemini uses structured JSON output and records token usage;
-the harness does not estimate Gemini spend. Scores remain provider- and model-specific:
-switching providers does not repair this corpus or turn its existing scores into a
-calibration result.
-
-**What a usable corpus needs: negatives drawn from the same source type and written in the
-same words as the positives.** For example, protocols with a comparable profile over a
-comparable period that were not exploited, described in the same terms as the ones that
-were. Neither source used here can produce that, which is why this is a rebuild of the
-corpus's *sources*, not of its formatting.
-
-## Cost model, measured — do not project one run type from another
-
-This is the mistake that cost the most here. A no-evidence control run has prompts roughly
-6.5× smaller than a real run, so projecting a with-evidence cost from a control understates
-it by more than half.
-
-| Run type | Input/scenario | Output/scenario | Cost/scenario (Sonnet 5, `effort: low`) |
-|---|---|---|---|
-| With evidence (12 entries) | ~7,170 tok | ~1,549 tok | **$0.030** |
-| Control, no evidence | ~1,100 tok | ~1,050 tok | **$0.013** |
-
-A full 229-row scored run with evidence is therefore about **$6.80**, and a 20-scenario
-control about **$0.25**. `bench/score.mts` now prints actual spend after every run and
-refuses to project a full-run cost from a no-evidence run.
-
-Total spent establishing the above: **$9.00**.
+A future calibration run must preserve the exact scenario set, retrieval rules,
+service configuration, raw output, scoring script, and final decision. A
+threshold may be published only with its supporting run and measurement.

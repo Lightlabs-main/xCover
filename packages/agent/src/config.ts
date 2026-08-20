@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { getAddress, isAddress, type Address, type Hex } from "viem";
-import type { AgentConfig, DeploymentRecord, Environment, ModelProvider } from "./types.js";
+import type { AgentConfig, AgentMode, DeploymentRecord, Environment, ModelProvider } from "./types.js";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -23,6 +23,18 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 
 function parseBigInt(env: NodeJS.ProcessEnv, name: string): bigint {
   const value = required(env, name);
+  try {
+    const parsed = BigInt(value);
+    if (parsed < 0n) throw new Error("negative");
+    return parsed;
+  } catch {
+    throw new ConfigError(`${name} must be a non-negative integer`);
+  }
+}
+
+function optionalBigInt(env: NodeJS.ProcessEnv, name: string, fallback: bigint): bigint {
+  const value = env[name]?.trim();
+  if (!value) return fallback;
   try {
     const parsed = BigInt(value);
     if (parsed < 0n) throw new Error("negative");
@@ -105,6 +117,12 @@ function quoteValidityBlocks(env: NodeJS.ProcessEnv): bigint {
   return blocks;
 }
 
+function calibrationQuoteValidityBlocks(env: NodeJS.ProcessEnv): bigint {
+  const blocks = optionalBigInt(env, "QUOTE_TTL_BLOCKS", 1n);
+  if (blocks === 0n) throw new ConfigError("QUOTE_TTL_BLOCKS must be greater than zero");
+  return blocks;
+}
+
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   rootDir = workspaceRoot(),
@@ -118,20 +136,48 @@ export function loadConfig(
   const rpcUrl = required(env, environment === "testnet" ? "XLAYER_TESTNET_RPC" : "XLAYER_MAINNET_RPC");
   const deployment = loadDeployment(rootDir, environment);
 
-  const rawProvider = required(env, "PRICING_MODEL_PROVIDER");
-  if (rawProvider !== "anthropic" && rawProvider !== "gemini") {
-    throw new ConfigError("PRICING_MODEL_PROVIDER must be anthropic or gemini");
+  const rawMode = env.PRICING_MODE?.trim() || "calibration_in_progress";
+  if (rawMode !== "pricing" && rawMode !== "provisional_pricing" && rawMode !== "calibration_in_progress") {
+    throw new ConfigError("PRICING_MODE must be pricing, provisional_pricing, or calibration_in_progress");
+  }
+  const mode = rawMode as AgentMode;
+
+  const rawProvider = mode === "calibration_in_progress"
+    ? (env.PRICING_MODEL_PROVIDER?.trim() || "anthropic")
+    : required(env, "PRICING_MODEL_PROVIDER");
+  if (rawProvider !== "anthropic" && rawProvider !== "gemini" && rawProvider !== "alibaba") {
+    throw new ConfigError("PRICING_MODEL_PROVIDER must be anthropic, gemini, or alibaba");
   }
   const modelProvider = rawProvider as ModelProvider;
 
-  const confidenceThresholdBps = parseBigInt(env, "PRICING_CONFIDENCE_THRESHOLD_BPS");
-  const maxEnsembleDisagreementBps = parseBigInt(env, "PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS");
-  const maxUncertaintyLoadingBps = parseBigInt(env, "PRICING_MAX_UNCERTAINTY_LOADING_BPS");
-  const capitalCostMarginBps = parseBigInt(env, "PRICING_CAPITAL_COST_MARGIN_BPS");
-  const oracleMaxAgeSeconds = parseBigInt(env, "PRICING_ORACLE_MAX_AGE_SECONDS");
-  const oracleMaxDeviationBps = parseBigInt(env, "PRICING_ORACLE_MAX_DEVIATION_BPS");
-  const depegLowerBound8dp = parseBigInt(env, "PRICING_DEPEG_LOWER_BOUND_8DP");
-  const maxPremiumRateRay = parseBigInt(env, "PRICING_MAX_PREMIUM_RATE_RAY");
+  const calibration = mode === "calibration_in_progress";
+  const provisional = mode === "provisional_pricing";
+  const confidenceThresholdBps = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_CONFIDENCE_THRESHOLD_BPS", 5_000n)
+    : parseBigInt(env, "PRICING_CONFIDENCE_THRESHOLD_BPS");
+  const maxEnsembleDisagreementBps = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS", 2_000n)
+    : parseBigInt(env, "PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS");
+  const maxUncertaintyLoadingBps = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_MAX_UNCERTAINTY_LOADING_BPS", 7_000n)
+    : parseBigInt(env, "PRICING_MAX_UNCERTAINTY_LOADING_BPS");
+  const capitalCostMarginBps = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_CAPITAL_COST_MARGIN_BPS", 500n)
+    : parseBigInt(env, "PRICING_CAPITAL_COST_MARGIN_BPS");
+  const oracleMaxAgeSeconds = calibration ? 1n : provisional
+    ? optionalBigInt(env, "PRICING_ORACLE_MAX_AGE_SECONDS", 3_600n)
+    : parseBigInt(env, "PRICING_ORACLE_MAX_AGE_SECONDS");
+  const oracleMaxDeviationBps = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_ORACLE_MAX_DEVIATION_BPS", 100n)
+    : parseBigInt(env, "PRICING_ORACLE_MAX_DEVIATION_BPS");
+  const depegLowerBound8dp = calibration
+    ? optionalBigInt(env, "PRICING_DEPEG_LOWER_BOUND_8DP", 97_000_000n)
+    : provisional
+      ? optionalBigInt(env, "PRICING_DEPEG_LOWER_BOUND_8DP", 97_000_000n)
+      : parseBigInt(env, "PRICING_DEPEG_LOWER_BOUND_8DP");
+  const maxPremiumRateRay = calibration ? 0n : provisional
+    ? optionalBigInt(env, "PRICING_MAX_PREMIUM_RATE_RAY", 1_000_000_000_000_000_000_000n)
+    : parseBigInt(env, "PRICING_MAX_PREMIUM_RATE_RAY");
   for (const [name, value] of [
     ["PRICING_CONFIDENCE_THRESHOLD_BPS", confidenceThresholdBps],
     ["PRICING_MAX_ENSEMBLE_DISAGREEMENT_BPS", maxEnsembleDisagreementBps],
@@ -145,15 +191,31 @@ export function loadConfig(
   if (depegLowerBound8dp === 0n || depegLowerBound8dp > 100_000_000n) {
     throw new ConfigError("PRICING_DEPEG_LOWER_BOUND_8DP must be between 1 and 100000000");
   }
-  if (maxPremiumRateRay === 0n) throw new ConfigError("PRICING_MAX_PREMIUM_RATE_RAY must be greater than zero");
+  if (!calibration && maxPremiumRateRay === 0n) throw new ConfigError("PRICING_MAX_PREMIUM_RATE_RAY must be greater than zero");
 
-  const modelApiKey = (modelProvider === "gemini" ? env.GEMINI_API_KEY : env.ANTHROPIC_API_KEY)?.trim() || undefined;
-  const modelName = (modelProvider === "gemini" ? env.GEMINI_MODEL : env.ANTHROPIC_MODEL)?.trim() || undefined;
+  const modelApiKey = calibration
+    ? undefined
+    : (modelProvider === "gemini"
+      ? env.GEMINI_API_KEY
+      : modelProvider === "alibaba"
+        ? env.ALIBABA_API_KEY
+        : env.ANTHROPIC_API_KEY)?.trim() || undefined;
+  const modelName = (modelProvider === "gemini"
+    ? env.GEMINI_MODEL
+    : modelProvider === "alibaba"
+      ? env.ALIBABA_MODEL
+      : env.ANTHROPIC_MODEL)?.trim() || undefined;
   if (modelApiKey && !modelName) {
-    throw new ConfigError(`${modelProvider === "gemini" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL"} is required when the selected API key is set`);
+    const modelVariable = modelProvider === "gemini"
+      ? "GEMINI_MODEL"
+      : modelProvider === "alibaba"
+        ? "ALIBABA_MODEL"
+        : "ANTHROPIC_MODEL";
+    throw new ConfigError(`${modelVariable} is required when the selected API key is set`);
   }
 
   return {
+    mode,
     environment,
     chainId,
     rpcUrl,
@@ -162,8 +224,13 @@ export function loadConfig(
     modelApiKey,
     modelName,
     pricerPrivateKey: parsePrivateKey(required(env, "PRICER_PRIVATE_KEY")),
-    engineVersion: required(env, "PRICING_ENGINE_VERSION"),
-    quoteValidityBlocks: quoteValidityBlocks(env),
+    engineVersion: env.PRICING_ENGINE_VERSION?.trim()
+      || (calibration
+        ? `pricing-calibration-in-progress/xlayer-${environment}`
+        : provisional
+          ? `pricing-provisional/xlayer-${environment}`
+          : `pricing-1.0.0/xlayer-${environment}`),
+    quoteValidityBlocks: calibration ? calibrationQuoteValidityBlocks(env) : quoteValidityBlocks(env),
     corpusPath: resolve(rootDir, env.PRICING_CORPUS_PATH?.trim() || "bench/data/corpus.jsonl"),
     decisionStorePath: resolve(rootDir, env.PRICING_DECISION_STORE_PATH?.trim() || "data/pricing-decisions"),
     pricing: {

@@ -9,9 +9,11 @@ import { assessAnthropic, AssessmentError, LIVE_STATE_EVIDENCE_ID, __test as ass
 import { canonicalJson, hashCanonicalJson } from "../src/canonical.js";
 import { loadCorpus } from "../src/evidence.js";
 import { assessGemini } from "../src/gemini.js";
+import { assessRouter } from "../src/router.js";
 import { assessmentRunnerFor } from "../src/model.js";
 import { MemoryDecisionStore } from "../src/store.js";
 import { assertDeploymentPair, ConfigError, loadConfig } from "../src/config.js";
+import { __test as chainTest } from "../src/chain.js";
 import { makeDecision, __test as decisionTest } from "../src/decision.js";
 import type { AgentConfig, Assessment, ChainState, DeploymentRecord, Evidence } from "../src/types.js";
 
@@ -34,6 +36,7 @@ function deployment(environment: "testnet" | "mainnet"): DeploymentRecord {
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
+    mode: "pricing",
     environment: "testnet",
     chainId: 1952,
     rpcUrl: "https://example.invalid",
@@ -128,9 +131,25 @@ test("environment pairing rejects the wrong venue before startup", () => {
   assert.doesNotThrow(() => assertDeploymentPair("testnet", deployment("testnet")));
 });
 
-test("provider selection routes Anthropic and Gemini explicitly", () => {
+test("provider selection routes Anthropic, Gemini, and Alibaba explicitly", () => {
   assert.equal(assessmentRunnerFor("anthropic"), assessAnthropic);
   assert.equal(assessmentRunnerFor("gemini"), assessGemini);
+  assert.equal(assessmentRunnerFor("alibaba"), assessRouter);
+});
+
+test("Aave data provider ABI matches the live twelve-field reserve tuple", () => {
+  const reserveData = chainTest.dataProviderAbi.find((item) => item.name === "getReserveData");
+  assert(reserveData);
+  assert.deepEqual(
+    reserveData.outputs?.map((output) => output.type),
+    ["uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint256", "uint40"],
+  );
+  const reserveConfiguration = chainTest.dataProviderAbi.find((item) => item.name === "getReserveConfigurationData");
+  assert(reserveConfiguration);
+  assert.deepEqual(
+    reserveConfiguration.outputs?.map((output) => output.type),
+    ["uint256", "uint256", "uint256", "uint256", "uint256", "bool", "bool", "bool", "bool", "bool"],
+  );
 });
 
 test("configuration selects Gemini credentials without reading Anthropic credentials", () => {
@@ -138,6 +157,7 @@ test("configuration selects Gemini credentials without reading Anthropic credent
   mkdirSync(join(root, "deployments"));
   writeFileSync(join(root, "deployments", "xlayer-testnet.json"), JSON.stringify(deployment("testnet")));
   const loaded = loadConfig({
+    PRICING_MODE: "pricing",
     XCOVER_ENVIRONMENT: "testnet",
     XLAYER_TESTNET_RPC: "https://example.invalid",
     PRICING_MODEL_PROVIDER: "gemini",
@@ -160,6 +180,21 @@ test("configuration selects Gemini credentials without reading Anthropic credent
   assert.equal(loaded.modelName, "gemini-test-model");
 });
 
+test("calibration-in-progress configuration starts without model or pricing controls", () => {
+  const root = mkdtempSync(join(tmpdir(), "xcover-calibration-config-"));
+  mkdirSync(join(root, "deployments"));
+  writeFileSync(join(root, "deployments", "xlayer-mainnet.json"), JSON.stringify(deployment("mainnet")));
+  const loaded = loadConfig({
+    PRICING_MODE: "calibration_in_progress",
+    XCOVER_ENVIRONMENT: "mainnet",
+    XLAYER_MAINNET_RPC: "https://example.invalid",
+    PRICER_PRIVATE_KEY: privateKey,
+  }, root);
+  assert.equal(loaded.mode, "calibration_in_progress");
+  assert.equal(loaded.modelApiKey, undefined);
+  assert.equal(loaded.quoteValidityBlocks, 1n);
+});
+
 test("missing model evidence produces a signed first-class refusal", async () => {
   const refusalConfig = config({ modelApiKey: undefined, modelName: undefined });
   const result = await makeDecision(refusalConfig, state(), [], 50_000n, 1n);
@@ -170,6 +205,25 @@ test("missing model evidence produces a signed first-class refusal", async () =>
   assert.match(result.document.gate.reasons.join(","), /model_credentials_missing/);
   assert.equal(result.decisionHash, hashCanonicalJson(result.document));
   assert.equal(JSON.parse(result.canonicalJson).verdict, "DECLINE_TO_QUOTE");
+});
+
+test("calibration-in-progress mode signs a refusal without calling a model", async () => {
+  const result = await makeDecision(
+    config({ mode: "calibration_in_progress", modelApiKey: undefined, modelName: undefined }),
+    state(),
+    [],
+    50_000n,
+    9n,
+    async () => { throw new Error("model must not be called in calibration mode"); },
+  );
+
+  assert.equal(result.document.mode, "calibration_in_progress");
+  assert.deepEqual(result.document.calibration, { status: "in_progress", thresholdDerived: false });
+  assert.equal(result.document.declineReason, "calibration_in_progress");
+  assert.equal(result.document.gate.reasons[0], "calibration_in_progress");
+  assert.equal(result.decision.declined, true);
+  assert.equal(result.decision.premiumRateRay, 0n);
+  assert.equal(result.decisionHash, hashCanonicalJson(result.document));
 });
 
 test("a bounded two-pass assessment produces a signed quote", async () => {
@@ -305,7 +359,7 @@ test("the gate quotes only when every condition holds, and names the one that fa
     ["oracle_depeg", await quoting({ oraclePrice: 96_000_000n })],
     ["utilization_above_100pct", await quoting({ utilizationBps: 10_001n })],
     ["reserve_not_active", await quoting({
-      reserveConfiguration: { decimals: 6n, reserveFactorBps: 1_000n, ltvBps: 7_500n, liquidationThresholdBps: 7_800n, isActive: false, isFrozen: false, isPaused: false },
+      reserveConfiguration: { decimals: 6n, reserveFactorBps: 1_000n, ltvBps: 7_500n, liquidationThresholdBps: 7_800n, isActive: false, isFrozen: false },
     })],
     ["oracle_stale", await quoting({
       blockTimestamp: 100_000n,

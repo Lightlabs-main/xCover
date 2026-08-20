@@ -2,7 +2,9 @@ import type { Address, Hex } from "viem";
 
 export type Environment = "testnet" | "mainnet";
 
-export type ModelProvider = "anthropic" | "gemini";
+export type ModelProvider = "anthropic" | "gemini" | "alibaba";
+
+export type AgentMode = "pricing" | "provisional_pricing" | "calibration_in_progress";
 
 export type DeploymentRecord = {
   asset: Address;
@@ -16,6 +18,7 @@ export type DeploymentRecord = {
 };
 
 export type AgentConfig = {
+  mode: AgentMode;
   environment: Environment;
   chainId: number;
   rpcUrl: string;
@@ -63,7 +66,6 @@ export type ChainState = {
     liquidationThresholdBps: bigint;
     isActive: boolean;
     isFrozen: boolean;
-    isPaused: boolean;
   } | null;
   oracleFeed: {
     answer: bigint;
@@ -124,6 +126,11 @@ export type GateResult = {
 
 export type DecisionDocument = {
   schema: "xcover.pricing-decision.v1";
+  mode: AgentMode;
+  calibration: {
+    status: "in_progress";
+    thresholdDerived: false;
+  } | null;
   engineVersion: string;
   request: {
     reserve: Address;

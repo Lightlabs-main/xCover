@@ -1,4 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { isAddress, getAddress, type Address, type PublicClient } from "viem";
 import { assertLivePairing, makePublicClient, readChainState } from "./chain.js";
 import { loadCorpus } from "./evidence.js";
@@ -25,6 +28,77 @@ function send(response: ServerResponse, status: number, body: unknown, contentTy
     "access-control-allow-methods": "GET,POST,OPTIONS",
   });
   response.end(payload);
+}
+
+const DASHBOARD_FILES: Record<string, { file: string; contentType: string }> = {
+  "/": { file: "index.html", contentType: "text/html" },
+  "/index.html": { file: "index.html", contentType: "text/html" },
+  "/app.js": { file: "app.js", contentType: "text/javascript" },
+  "/styles.css": { file: "styles.css", contentType: "text/css" },
+};
+
+async function serveDashboard(pathname: string, response: ServerResponse): Promise<boolean> {
+  const requested = DASHBOARD_FILES[pathname];
+  if (!requested) return false;
+  const candidateRoots = [resolve(process.cwd(), "apps/web"), resolve(process.cwd(), "../../apps/web")];
+  const root = candidateRoots.find((item) => existsSync(item));
+  if (!root) return false;
+  const file = resolve(root, requested.file);
+  if (!file.startsWith(`${root}/`)) return false;
+  try {
+    send(response, 200, await readFile(file, "utf8"), requested.contentType);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function serveProjectGuide(pathname: string, response: ServerResponse): Promise<boolean> {
+  if (pathname !== "/docs/project-guide.md") return false;
+  const candidateRoots = [resolve(process.cwd(), "docs"), resolve(process.cwd(), "../../docs")];
+  const root = candidateRoots.find((item) => existsSync(item));
+  if (!root) return false;
+  const file = resolve(root, "project-guide.md");
+  if (!file.startsWith(`${root}/`)) return false;
+  try {
+    send(response, 200, await readFile(file, "utf8"), "text/markdown");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function proxyRpc(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AgentConfig,
+): Promise<boolean> {
+  if (request.method !== "POST") return false;
+
+  const payload = await body(request);
+  const fallback = config.environment === "mainnet" ? process.env.XLAYER_MAINNET_RPC_FALLBACK : undefined;
+  const endpoints = [config.rpcUrl, fallback].filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+  let lastError = "RPC request failed";
+
+  for (const endpoint of endpoints) {
+    try {
+      const upstream = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await upstream.text();
+      if (upstream.ok && text) {
+        send(response, upstream.status, text, "application/json");
+        return true;
+      }
+      lastError = `RPC returned HTTP ${upstream.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  throw new Error(lastError);
 }
 
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -93,7 +167,7 @@ export class PricingAgent {
 
 export async function startServer(
   config: AgentConfig,
-  options: { client?: PublicClient; store?: DecisionStore; port?: number } = {},
+  options: { client?: PublicClient; store?: DecisionStore; port?: number; host?: string } = {},
 ): Promise<{ server: Server; agent: PricingAgent; port: number }> {
   const agent = new PricingAgent(
     config,
@@ -109,14 +183,30 @@ export async function startServer(
         return;
       }
       const url = new URL(request.url ?? "/", "http://localhost");
+      if (request.method === "GET" && await serveDashboard(url.pathname, response)) return;
+      if (request.method === "GET" && await serveProjectGuide(url.pathname, response)) return;
+      if (url.pathname === "/rpc" && await proxyRpc(request, response, config)) return;
       if (request.method === "GET" && url.pathname === "/health") {
         send(response, 200, {
           status: "ok",
+          mode: config.mode,
+          calibration: config.mode === "calibration_in_progress" || config.mode === "provisional_pricing"
+            ? {
+                status: "in_progress",
+                thresholdDerived: false,
+                quotesEnabled: config.mode === "provisional_pricing",
+                unaudited: config.mode === "provisional_pricing",
+              }
+            : null,
           environment: config.environment,
           chainId: config.chainId,
           venue: config.deployment.venueName,
           corpusEntries: agent.corpusSize,
         });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/deployment") {
+        send(response, 200, { ...config.deployment, rpcUrl: config.rpcUrl, mode: config.mode });
         return;
       }
       const decisionMatch = url.pathname.match(/^\/decision\/(0x[0-9a-fA-F]{64})$/);
@@ -153,9 +243,10 @@ export async function startServer(
     }
   });
   const port = options.port ?? Number(process.env.PORT ?? 8787);
+  const host = options.host ?? process.env.HOST ?? "127.0.0.1";
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve());
+    server.listen(port, host, () => resolve());
   });
   return { server, agent, port };
 }

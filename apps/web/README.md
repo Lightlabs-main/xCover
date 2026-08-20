@@ -9,7 +9,7 @@ The dashboard reads the shared reserve, requests a signed cover price, records
 the decision, and guides the wallet through the covered deposit or exit.
 
 For the complete AI, Aave V3, underwriting, policy, premium, and claim flow,
-read [`docs/project-guide.md`](../../docs/project-guide.md).
+visit the live guide at [xcover.online/docs](https://xcover.online/docs).
 
 The public page introduces xCover. Select **Open dashboard** to use the wallet
 and transaction controls.

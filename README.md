@@ -8,8 +8,7 @@ xCover and open a covered position in the same flow. The position is backed by
 a USDT underwriting pool: capital providers add funds, receive pool shares, and
 supply the capital that stands behind depositor cover.
 
-Read the complete product and architecture guide in
-[`docs/project-guide.md`](docs/project-guide.md).
+Read the product guide at [xcover.online/docs](https://xcover.online/docs).
 
 ## The product
 

@@ -12,6 +12,7 @@ data/pricing-decisions/
 .env
 .env.*
 !.env.example
+.secrets/
 
 # Foundry
 packages/contracts/out/

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1f44" />
+    <meta name="description" content="How xCover prices and records Aave V3 depositor cover on X Layer." />
+    <title>How xCover works · xCover</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="docs-page">
+    <main class="shell docs-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="xCover home">
+          <span class="brand-mark">×</span>
+          <span class="brand-name">xCover</span>
+          <span class="brand-tag">HOW IT WORKS</span>
+        </a>
+        <div class="top-actions">
+          <span class="wallet-state"><span class="live-dot"></span><span id="docsNetwork">Checking live network…</span></span>
+          <a class="button primary" href="/#dashboard">Open dashboard</a>
+        </div>
+      </header>
+
+      <section class="docs-hero">
+        <div>
+          <div class="eyebrow light">THE xCOVER PRODUCT</div>
+          <h1>Cover for an Aave V3 position, with the decision in plain sight.</h1>
+          <p>xCover reads live reserve evidence, signs a price or refusal, and lets the wallet and contracts enforce the final position. Capital providers supply the pool behind the cover.</p>
+        </div>
+        <div class="docs-live-card">
+          <div class="eyebrow light">LIVE STATUS</div>
+          <strong id="docsMode">Loading…</strong>
+          <span id="docsVenue">Checking deployment…</span>
+          <span id="docsBlock">Block —</span>
+        </div>
+      </section>
+
+      <div class="docs-layout">
+        <aside class="docs-toc" aria-label="On this page">
+          <div class="eyebrow">ON THIS PAGE</div>
+          <a href="#overview">Overview</a>
+          <a href="#depositor">For depositors</a>
+          <a href="#underwriter">For underwriters</a>
+          <a href="#claims">When cover pays</a>
+          <a href="#controls">Controls and limits</a>
+          <a href="#contracts">Live contracts</a>
+        </aside>
+
+        <article class="docs-article">
+          <section id="overview" class="docs-section">
+            <div class="eyebrow">01 / OVERVIEW</div>
+            <h2>Three responsibilities, kept separate.</h2>
+            <p>xCover is designed so the pricing agent can make a decision without controlling user funds. The wallet signs money-moving transactions, while the contracts enforce the recorded decision and solvency rules.</p>
+            <div class="docs-flow">
+              <div><span>01</span><strong>Read</strong><small>Aave V3 reserve and pool state</small></div>
+              <div><span>02</span><strong>Price</strong><small>Signed quote or signed refusal</small></div>
+              <div><span>03</span><strong>Enforce</strong><small>Registry, vault, pool, and resolver</small></div>
+            </div>
+          </section>
+
+          <section id="depositor" class="docs-section">
+            <div class="eyebrow">02 / DEPOSITOR FLOW</div>
+            <h2>Open a covered USDT deposit.</h2>
+            <ol class="docs-steps">
+              <li><strong>Connect on X Layer.</strong> The dashboard checks the wallet network and offers to add or switch to chain 196.</li>
+              <li><strong>Request a live price.</strong> The service reads the configured mainnet deployment and returns a signed price or a refusal with reasons.</li>
+              <li><strong>Record the decision.</strong> The wallet submits the signed decision to the pricing registry, making it public and binding for the next step.</li>
+              <li><strong>Approve and open.</strong> The wallet approves USDT, then the vault opens the Aave-backed position with the quote hash attached.</li>
+              <li><strong>Read or exit.</strong> The dashboard reads the position and lets its owner exit the full position when the contract allows it.</li>
+            </ol>
+          </section>
+
+          <section id="underwriter" class="docs-section split-docs">
+            <div>
+              <div class="eyebrow">03 / UNDERWRITING</div>
+              <h2>Capital stands behind the cover.</h2>
+              <p>Underwriters approve USDT to the pool and deposit capital for pool shares. Free capital is the amount available for new cover; outstanding cover is the amount already reserved.</p>
+            </div>
+            <div class="docs-note"><strong>Two transactions</strong><span>Approve USDT, then add pool funds.</span><strong>One exit path</strong><span>Withdraw shares when capital is free.</span></div>
+          </section>
+
+          <section id="claims" class="docs-section">
+            <div class="eyebrow">04 / CLAIMS</div>
+            <h2>Observations create the evidence trail.</h2>
+            <p>Anyone can publish a fresh reserve observation. The resolver samples the venue and Aave state over time; a keeper does not decide whether a claim is valid. The deployed claim rules evaluate the recorded evidence and pay according to the policy terms.</p>
+            <div class="callout blue-callout"><strong>What the dashboard shows</strong><span>Reserve liquidity, deficit, supplied assets, pool capital, outstanding cover, and public registry counters.</span></div>
+          </section>
+
+          <section id="controls" class="docs-section">
+            <div class="eyebrow">05 / CONTROLS</div>
+            <h2>Refusal is a valid outcome.</h2>
+            <div class="docs-table">
+              <div><strong>Reserve evidence</strong><span>Missing or inconsistent data can stop a quote.</span></div>
+              <div><strong>Pool capacity</strong><span>New cover cannot exceed available backing.</span></div>
+              <div><strong>Price validity</strong><span>Quotes expire at a block and must be recorded before deposit.</span></div>
+              <div><strong>Contract separation</strong><span>The pricer signs decisions; it cannot move pool funds or settle claims.</span></div>
+            </div>
+            <p class="docs-disclaimer">Live pricing is currently marked provisional and unaudited while calibration continues. Treat the dashboard as a working protocol interface, not a promise of loss coverage.</p>
+          </section>
+
+          <section id="contracts" class="docs-section">
+            <div class="eyebrow">06 / LIVE DEPLOYMENT</div>
+            <h2>Verify what you are using.</h2>
+            <p>These addresses are loaded from the same deployment record that powers the dashboard.</p>
+            <div id="contractList" class="contract-list"><span>Loading live contract addresses…</span></div>
+          </section>
+
+          <div class="docs-endcap"><a class="button primary" href="/#dashboard">Open the live dashboard <span>↗</span></a><a class="text-link dark-link" href="https://github.com/Lightlabs-main/xCover" target="_blank" rel="noreferrer">View source on GitHub ↗</a></div>
+        </article>
+      </div>
+
+      <footer><span>xCover · X Layer mainnet</span><span><a href="/">Home</a> <a href="/#dashboard">Dashboard</a></span></footer>
+    </main>
+    <script>
+      const addressLabels = [
+        ["asset", "USDT asset"], ["coverPool", "CoverPool"], ["xCoverVault", "xCoverVault"],
+        ["pricingRegistry", "PricingRegistry"], ["claimResolver", "ClaimResolver"], ["venue", "Venue"],
+      ];
+      const shortAddress = (value) => `${value.slice(0, 8)}…${value.slice(-6)}`;
+      const link = (value) => `https://www.oklink.com/x-layer/address/${value}`;
+      Promise.all([fetch("/health").then((response) => response.json()), fetch("/deployment").then((response) => response.json())])
+        .then(([health, deployment]) => {
+          document.getElementById("docsNetwork").textContent = `X Layer · chain ${health.chainId}`;
+          document.getElementById("docsMode").textContent = health.calibration?.unaudited ? `${health.mode.replaceAll("_", " ")} · unaudited` : `${health.mode.replaceAll("_", " ")} · live`;
+          document.getElementById("docsVenue").textContent = deployment.venueName;
+          document.getElementById("docsBlock").textContent = `Deployment block ${deployment.blockNumber.toLocaleString()}`;
+          const list = document.getElementById("contractList");
+          list.replaceChildren(...addressLabels.map(([key, label]) => {
+            const row = document.createElement("div");
+            const name = document.createElement("strong");
+            name.textContent = label;
+            const address = document.createElement("a");
+            address.href = link(deployment[key]);
+            address.target = "_blank";
+            address.rel = "noreferrer";
+            address.textContent = shortAddress(deployment[key]);
+            row.append(name, address);
+            return row;
+          }));
+        })
+        .catch(() => {
+          document.getElementById("docsNetwork").textContent = "Live status unavailable";
+          document.getElementById("docsMode").textContent = "Check dashboard status";
+        });
+    </script>
+  </body>
+</html>

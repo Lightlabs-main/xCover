@@ -339,7 +339,10 @@ async function boot() {
       { batchMaxCount: 1, batchStallTime: 0 },
     );
     state.contracts = makeContracts(state.provider);
-    setText("agentLabel", "AI pricing live");
+    const pricingLabel = state.health.calibration?.unaudited
+      ? `${state.health.mode.replaceAll("_", " ")} · unaudited`
+      : `${state.health.mode.replaceAll("_", " ")} · live`;
+    setText("agentLabel", pricingLabel);
     $("explorerLink").href = explorer(state.deployment.xCoverVault);
     await refresh();
     setStatus("Live mainnet state loaded. Connect a wallet to transact.", "success");

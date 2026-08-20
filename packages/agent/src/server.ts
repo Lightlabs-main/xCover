@@ -33,6 +33,8 @@ function send(response: ServerResponse, status: number, body: unknown, contentTy
 const DASHBOARD_FILES: Record<string, { file: string; contentType: string }> = {
   "/": { file: "index.html", contentType: "text/html" },
   "/index.html": { file: "index.html", contentType: "text/html" },
+  "/docs": { file: "docs.html", contentType: "text/html" },
+  "/docs/": { file: "docs.html", contentType: "text/html" },
   "/app.js": { file: "app.js", contentType: "text/javascript" },
   "/styles.css": { file: "styles.css", contentType: "text/css" },
 };
@@ -47,21 +49,6 @@ async function serveDashboard(pathname: string, response: ServerResponse): Promi
   if (!file.startsWith(`${root}/`)) return false;
   try {
     send(response, 200, await readFile(file, "utf8"), requested.contentType);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function serveProjectGuide(pathname: string, response: ServerResponse): Promise<boolean> {
-  if (pathname !== "/docs/project-guide.md") return false;
-  const candidateRoots = [resolve(process.cwd(), "docs"), resolve(process.cwd(), "../../docs")];
-  const root = candidateRoots.find((item) => existsSync(item));
-  if (!root) return false;
-  const file = resolve(root, "project-guide.md");
-  if (!file.startsWith(`${root}/`)) return false;
-  try {
-    send(response, 200, await readFile(file, "utf8"), "text/markdown");
     return true;
   } catch {
     return false;
@@ -184,7 +171,6 @@ export async function startServer(
       }
       const url = new URL(request.url ?? "/", "http://localhost");
       if (request.method === "GET" && await serveDashboard(url.pathname, response)) return;
-      if (request.method === "GET" && await serveProjectGuide(url.pathname, response)) return;
       if (url.pathname === "/rpc" && await proxyRpc(request, response, config)) return;
       if (request.method === "GET" && url.pathname === "/health") {
         send(response, 200, {

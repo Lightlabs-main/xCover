@@ -5,6 +5,7 @@ on X Layer.**
 
 [Live application](https://xcover.online) ·
 [Product documentation](https://xcover.online/docs) ·
+[X thread](https://x.com/x_Covered/status/2090831103615553625) ·
 [Mainnet deployment record](deployments/xlayer-mainnet.json) ·
 [Contract specification](docs/SPEC.md)
 

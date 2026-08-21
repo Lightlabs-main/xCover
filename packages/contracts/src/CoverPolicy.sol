@@ -3,6 +3,8 @@ pragma solidity 0.8.28;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICoverPolicy} from "./interfaces/ICoverPolicy.sol";
 import {ICoverPool} from "./interfaces/ICoverPool.sol";
 
@@ -28,6 +30,7 @@ import {ICoverPool} from "./interfaces/ICoverPool.sol";
 ///      - **Daily cap per reserve.** New cover written per reserve per day is bounded, so the
 ///        same insight cannot be scaled up arbitrarily within a single day.
 contract CoverPolicy is ICoverPolicy, ERC721, AccessControl {
+    using Strings for uint256;
     /// @notice May mint policies and end them without a payout. Held by xCoverVault.
     bytes32 public constant VAULT_ROLE = keccak256("VAULT_ROLE");
 
@@ -81,6 +84,11 @@ contract CoverPolicy is ICoverPolicy, ERC721, AccessControl {
     }
 
     /// @inheritdoc ICoverPolicy
+    function nextPolicyId() external view returns (uint256) {
+        return _nextPolicyId;
+    }
+
+    /// @inheritdoc ICoverPolicy
     function activeFromBlock(uint256 policyId) public view returns (uint64) {
         Policy storage p = _policies[policyId];
         if (p.state == PolicyState.None) revert UnknownPolicy(policyId);
@@ -108,6 +116,53 @@ contract CoverPolicy is ICoverPolicy, ERC721, AccessControl {
     /// @notice Total payout obligation currently reserved for this policy, per the pool.
     function reservedCover(uint256 policyId) external view returns (uint256) {
         return pool.coverOf(policyId);
+    }
+
+    /// @notice Fully on-chain metadata for wallets, explorers and policy viewers.
+    /// @dev The SVG and JSON are generated from current policy state, so terminal lifecycle
+    ///      transitions are reflected without an off-chain metadata server or mutable base URI.
+    function tokenURI(uint256 policyId) public view override returns (string memory) {
+        _requireOwned(policyId);
+        Policy storage p = _policies[policyId];
+        string memory id = policyId.toString();
+        string memory stateLabel = _stateLabel(p.state);
+        string memory svg = string.concat(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720">',
+            '<rect width="720" height="720" rx="48" fill="#081a38"/>',
+            '<path d="M0 520L720 250V720H0Z" fill="#1267ff" opacity=".28"/>',
+            '<text x="60" y="105" fill="#80adff" font-family="monospace" font-size="24">X LAYER / AAVE V3</text>',
+            '<text x="60" y="210" fill="white" font-family="sans-serif" font-size="72" font-weight="700">xCover</text>',
+            '<text x="60" y="285" fill="#80adff" font-family="monospace" font-size="32">POLICY NFT #', id, '</text>',
+            '<rect x="60" y="360" width="600" height="110" rx="20" fill="#102b59" stroke="#4386ff"/>',
+            '<text x="90" y="405" fill="#80adff" font-family="monospace" font-size="20">LIFECYCLE</text>',
+            '<text x="90" y="448" fill="white" font-family="sans-serif" font-size="32" font-weight="600">', stateLabel, '</text>',
+            '<text x="60" y="575" fill="white" font-family="monospace" font-size="22">COVER ', p.coverAmount.toString(), ' USDT UNITS</text>',
+            '<text x="60" y="620" fill="#80adff" font-family="monospace" font-size="18">START ', uint256(p.startBlock).toString(), ' / END ', uint256(p.endBlock).toString(), '</text>',
+            '<text x="60" y="665" fill="#80adff" font-family="monospace" font-size="18">ON-CHAIN / NON-TRANSFERABLE</text>',
+            '</svg>'
+        );
+        string memory json = string.concat(
+            '{"name":"xCover Policy #', id,
+            '","description":"Non-transferable, fully backed Aave V3 depositor cover on X Layer. Policy terms and lifecycle are enforced on-chain.",',
+            '"image":"data:image/svg+xml;base64,', Base64.encode(bytes(svg)), '",',
+            '"attributes":[',
+            '{"trait_type":"Lifecycle","value":"', stateLabel, '"},',
+            '{"trait_type":"Covered amount (USDT units)","value":"', p.coverAmount.toString(), '"},',
+            '{"display_type":"number","trait_type":"Start block","value":', uint256(p.startBlock).toString(), '},',
+            '{"display_type":"number","trait_type":"Active from block","value":', uint256(p.startBlock + waitingPeriodBlocks).toString(), '},',
+            '{"display_type":"number","trait_type":"End block","value":', uint256(p.endBlock).toString(), '}',
+            ']}'
+        );
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
+    }
+
+    function _stateLabel(PolicyState state) internal pure returns (string memory) {
+        if (state == PolicyState.Active) return "Active";
+        if (state == PolicyState.Expired) return "Expired";
+        if (state == PolicyState.Claimable) return "Claimable";
+        if (state == PolicyState.Paid) return "Paid";
+        if (state == PolicyState.Cancelled) return "Cancelled";
+        return "Unknown";
     }
 
     // --- issuance -------------------------------------------------------------------------

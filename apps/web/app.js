@@ -31,6 +31,7 @@ const ABI = {
     "function ownerOf(uint256) view returns (address)", "function nextPolicyId() view returns (uint256)",
     "function policies(uint256) view returns (address reserve,uint256 coverAmount,uint64 startBlock,uint64 endBlock,uint256 premiumRateRay,bytes32 quoteHash,bytes32 termsHash,uint8 state)",
     "function activeFromBlock(uint256) view returns (uint64)", "function isCoverActive(uint256) view returns (bool)",
+    "function tokenURI(uint256) view returns (string)",
   ],
 };
 
@@ -221,17 +222,23 @@ function policyLifecycle(policy, activeFrom, coverActive, block) {
 
 async function policyHtml(policyId, block) {
   const { policy } = state.contracts;
-  const [record, activeFrom, coverActive, owner, name, symbol] = await Promise.all([
+  const [record, activeFrom, coverActive, owner, name, symbol, tokenUri] = await Promise.all([
     policy.policies(policyId), policy.activeFromBlock(policyId), policy.isCoverActive(policyId),
-    policy.ownerOf(policyId), policy.name(), policy.symbol(),
+    policy.ownerOf(policyId), policy.name(), policy.symbol(), policy.tokenURI(policyId),
   ]);
   const lifecycle = policyLifecycle(record, activeFrom, coverActive, block);
   const remaining = BigInt(activeFrom) > BigInt(block) ? BigInt(activeFrom) - BigInt(block) : 0n;
   const quoteHash = record.quoteHash ?? record[5];
   const termsHash = record.termsHash ?? record[6];
+  let image = "";
+  try {
+    const metadata = JSON.parse(atob(tokenUri.split(",")[1]));
+    image = metadata.image || "";
+  } catch {}
   return {
     lifecycle,
-    html: `<strong>${escapeHtml(name)} NFT #${policyId} (${escapeHtml(symbol)})</strong><br>`
+    html: `${image ? `<img class="policy-art" src="${escapeHtml(image)}" alt="xCover Policy NFT #${policyId}" />` : ""}`
+      + `<strong>${escapeHtml(name)} NFT #${policyId} (${escapeHtml(symbol)})</strong><br>`
       + `Lifecycle: <strong>${escapeHtml(lifecycle)}</strong><br>`
       + `Owner: <a href="${explorer(owner)}" target="_blank" rel="noreferrer">${escapeHtml(short(owner))} ↗</a><br>`
       + `Covered amount: <strong>${units(record.coverAmount ?? record[1])}</strong><br>`

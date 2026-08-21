@@ -73,6 +73,7 @@
             <p>Every successful covered deposit immediately mints an ERC-721 named <strong>xCover Policy</strong>, symbol <strong>XCOVER</strong>. Its token ID is the policy ID. The associated on-chain record fixes the owner, reserve, covered amount, start and end blocks, premium rate, signed-quote hash, terms hash, and lifecycle state.</p>
             <div class="docs-table">
               <div><strong>What the buyer receives</strong><span>Linked vault shares for the Aave-supplied USDT position and one XCOVER policy NFT for its cover terms.</span></div>
+              <div><strong>On-chain artwork and metadata</strong><span>The tokenURI returns Base64 JSON with an embedded Base64 SVG. Wallets and explorers can render it without depending on an xCover metadata server.</span></div>
               <div><strong>When it is minted</strong><span>In the same atomic transaction that supplies USDT to Aave and reserves matching underwriting capacity—not after 24 hours.</span></div>
               <div><strong>What happens after 24 hours</strong><span>No new token appears. The existing policy becomes eligible for deterministic claim evaluation once sufficient observations exist.</span></div>
               <div><strong>What a valid claim pays</strong><span>The resolver marks the existing policy Claimable and settles the covered amount due in USDT from the underwriting pool; the claim is not another token.</span></div>
@@ -187,7 +188,7 @@
     </main>
     <script>
       const addressLabels = [
-        ["asset", "USDT asset"], ["coverPool", "CoverPool"], ["xCoverVault", "xCoverVault"],
+        ["asset", "USDT asset"], ["coverPool", "CoverPool"], ["coverPolicy", "CoverPolicy / XCOVER NFT"], ["xCoverVault", "xCoverVault"],
         ["pricingRegistry", "PricingRegistry"], ["claimResolver", "ClaimResolver"], ["venue", "Venue"],
       ];
       const shortAddress = (value) => `${value.slice(0, 8)}…${value.slice(-6)}`;

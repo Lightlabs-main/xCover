@@ -195,6 +195,11 @@ that supplies USDT to Aave and reserves underwriting capital. The dashboard can
 read an open wallet position automatically and can look up any policy by ID,
 including a policy retained as a cancelled historical record after exit.
 
+Its `tokenURI` is generated entirely on-chain as Base64 JSON containing an
+embedded Base64 SVG. Wallets and explorers therefore need no centralized image
+server to render the XCOVER card, and its displayed lifecycle metadata updates
+when the policy becomes claimable, paid, expired, or cancelled.
+
 The 24-hour waiting period does **not** mint another token and does not lock the
 deposit. The existing XCOVER NFT moves through a contract-controlled lifecycle:
 
@@ -251,9 +256,10 @@ because the vault position and policy are owner-linked and must not diverge.
 
 ## Live X Layer deployment
 
-The current mainnet contract set was deployed on X Layer chain 196 at block
-`68537850`. The application loads these addresses from the same machine-readable
-manifest used by the pricing service.
+The metadata-enabled mainnet policy components were deployed on X Layer chain
+196 beginning at block `68549382`. The funded pool, pricing registry, and Aave
+venue were retained. The application loads these addresses from the same
+machine-readable manifest used by the pricing service.
 
 | Component | Address |
 |---|---|
@@ -261,10 +267,10 @@ manifest used by the pricing service.
 | Aave USDT aToken | `0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297` |
 | `AaveV3Venue` | `0x23a2Ae137030034e604fEE085169bfaFad6Fc1a9` |
 | `CoverPool` | `0xe47298EA2ce467555044Dd707A646F9dF863bb87` |
-| `CoverPolicy` | `0xD4A4Dd34e76e42ec206f65D0fC9F7eCb09A895fa` |
+| `CoverPolicy` | `0x2e544153a506d2972d28dbe45Fca2089A23770c1` |
 | `PricingRegistry` | `0x35072d8AB440B3b52942A04B5a67179e46eF6692` |
-| `ClaimResolver` | `0xa18Ae50fc36194833155084bE21962EC3695aF3D` |
-| `xCoverVault` | `0x51025304e7aaaB594F55e8d92DF334257A65E2Be` |
+| `ClaimResolver` | `0xdED143C1b464C3C651Fc071BbDF5B9c553495dDB` |
+| `xCoverVault` | `0xa3b4789295CD45be435AfF5333c4E6BE80106256` |
 
 See [`deployments/xlayer-mainnet.json`](deployments/xlayer-mainnet.json) for
 deployment transaction hashes and [`docs/deployments.md`](docs/deployments.md)

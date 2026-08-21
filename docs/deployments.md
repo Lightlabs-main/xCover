@@ -10,6 +10,14 @@ hashes and explorer links for every contract, so the order is verifiable on chai
 rather than asserted here. `script/record_deployment.py` merges creation hashes
 from Foundry's broadcast artifact after each real deployment.
 
+Mainnet redeployments are intentionally explicit: `DeployMainnet.s.sol` refuses
+to run when a current mainnet record exists unless
+`XCOVER_ALLOW_MAINNET_REDEPLOY=true` is set. Before a permitted redeployment,
+preserve the current record under its deployment block; after broadcasting, run
+`record_deployment.py`, copy the new manifest and rebuilt agent/UI together, and
+verify `/deployment` against chain 196 before enabling traffic. This keeps a new
+on-chain address set from being hidden behind an old application configuration.
+
 ---
 
 ## X Layer testnet — chain 1952
@@ -229,8 +237,9 @@ The next testnet lifecycle must keep observations within 30 blocks across the
 120-block window; mainnet's 1,800-block window uses a 60-block maximum gap and
 should target materially faster.
 
-The quotes in this run were signed by hand with the pricer key, because the
-pricing agent does not exist yet. That is not a shortcut around the trust model:
+The quotes in this historical run were signed by hand with the pricer key,
+because the pricing agent was not yet present at that point. That is not a
+shortcut around the trust model:
 `PricingRegistry` verifies the signature and the `PRICER_ROLE` either way, so a
 hand-signed decision goes through exactly the same door the agent will.
 
@@ -238,9 +247,31 @@ hand-signed decision goes through exactly the same door the agent will.
 
 ## X Layer mainnet — chain 196
 
-**Not yet deployed.** `DeployMainnet.s.sol` is written and refuses to run unless
-`deployments/xlayer-testnet.json` exists, so the required order cannot be skipped
-by accident.
+The corrected build was deployed **21 August 2026**, then its metadata-enabled
+policy components were migrated beginning at block `68549382`. The funded pool,
+pricing registry, and Aave venue were preserved. The current record is
+[`deployments/xlayer-mainnet.json`](../deployments/xlayer-mainnet.json); the
+superseded deployments are preserved at
+[`deployments/xlayer-mainnet.superseded-68445915.json`](../deployments/xlayer-mainnet.superseded-68445915.json)
+and [`deployments/xlayer-mainnet.superseded-68536153.json`](../deployments/xlayer-mainnet.superseded-68536153.json).
+
+| Contract | Address |
+|---|---|
+| USDT (covered asset) | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` |
+| Aave USDT aToken | `0xF356ae412dB5df43BD3a10746f7ad4e1C4De4297` |
+| `AaveV3Venue` | `0x23a2Ae137030034e604fEE085169bfaFad6Fc1a9` |
+| `CoverPool` | `0xe47298EA2ce467555044Dd707A646F9dF863bb87` |
+| `CoverPolicy` | `0x2e544153a506d2972d28dbe45Fca2089A23770c1` |
+| `PricingRegistry` | `0x35072d8AB440B3b52942A04B5a67179e46eF6692` |
+| `ClaimResolver` | `0xdED143C1b464C3C651Fc071BbDF5B9c553495dDB` |
+| `xCoverVault` | `0xa3b4789295CD45be435AfF5333c4E6BE80106256` |
+
+`termsHash` is `0x3443d5442ff979c58f12c68ba9ce0208ecc5cd363247488adf2105a38bf04863`.
+The vault emits the corrected policy ID in `PricingRegistry.QuoteConsumed` by
+reading `CoverPolicy.nextPolicyId()` before consuming the quote; the regression
+is covered by `xCoverVault.t.sol`. The vault also cancels an untriggered policy
+when the holder exits during the waiting period, so capital cannot remain
+reserved behind an exited position.
 
 When it runs it deploys the identical xCover contract set plus `AaveV3Venue`,
 bound to the live Aave V3 Pool and the real USDT reserve at the addresses in

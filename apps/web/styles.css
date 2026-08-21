@@ -192,3 +192,10 @@ footer a { color: var(--blue); }
   .docs-table div { grid-template-columns: 1fr; gap: 3px; }
   .docs-endcap { align-items: flex-start; flex-direction: column; }
 }
+.policy-art {
+  display: block;
+  width: min(100%, 280px);
+  margin: 0 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}

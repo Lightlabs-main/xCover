@@ -74,6 +74,38 @@ contract CoverPolicyTest is Test {
         assertEq(p.coverAmount, 10_000e6);
     }
 
+    function test_TokenURIIsFullyOnChainAndTracksLifecycle() public {
+        uint256 id = _mint(10_000e6);
+        string memory activeMetadata = policy.tokenURI(id);
+
+        assertTrue(
+            bytes(activeMetadata).length > bytes("data:application/json;base64,").length,
+            "metadata data URI is empty"
+        );
+        assertEq(
+            _prefix(activeMetadata, bytes("data:application/json;base64,").length),
+            "data:application/json;base64,"
+        );
+
+        vm.prank(vault);
+        policy.cancel(id);
+        string memory cancelledMetadata = policy.tokenURI(id);
+
+        assertNotEq(
+            keccak256(bytes(activeMetadata)),
+            keccak256(bytes(cancelledMetadata)),
+            "metadata did not reflect lifecycle transition"
+        );
+        assertEq(policy.ownerOf(id), holder, "terminal policy NFT history disappeared");
+    }
+
+    function _prefix(string memory value, uint256 length) internal pure returns (string memory) {
+        bytes memory source = bytes(value);
+        bytes memory result = new bytes(length);
+        for (uint256 i; i < length; ++i) result[i] = source[i];
+        return string(result);
+    }
+
     /// @dev The daily cap binds well below total capital, so free capital has to be drawn down
     ///      across several reserves before the solvency bound is the one that actually binds.
     ///      That ordering is the point: the cap is a per-reserve control, solvency is absolute.

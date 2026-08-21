@@ -25,7 +25,13 @@ const ABI = {
     "function venueName() view returns (string)", "function hasYieldSource() view returns (bool)",
     "function observeReserve(address,address) view returns (uint256 deficit,uint256 price,uint256 redeemableLiquidity,uint256 totalSupplied)",
   ],
-  resolver: ["function recordObservation(address,address) returns (uint256)"],
+  resolver: [
+    "function recordObservation(address,address) returns (uint256)",
+    "function assess(uint256,(address reserve,address aToken,uint64 windowBlocks,uint64 minSamples,uint64 maxObservationGapBlocks,uint256 depegLowerBound,uint256 liquidityFloorBps,uint256 deficitFloorBps)) view returns (uint8 trigger,uint256 payout)",
+    "function evaluate(uint256,(address reserve,address aToken,uint64 windowBlocks,uint64 minSamples,uint64 maxObservationGapBlocks,uint256 depegLowerBound,uint256 liquidityFloorBps,uint256 deficitFloorBps)) returns (uint8 trigger)",
+    "function claim(uint256) returns (uint256 amount)",
+    "function claimAmount(uint256) view returns (uint256)", "function triggerOf(uint256) view returns (uint8)",
+  ],
   policy: [
     "function name() view returns (string)", "function symbol() view returns (string)",
     "function ownerOf(uint256) view returns (address)", "function nextPolicyId() view returns (uint256)",
@@ -47,6 +53,18 @@ const state = {
   decision: null,
   decisionRecorded: false,
 };
+
+// These values are the terms hash committed by the current mainnet deployment. They are public
+// policy terms, not user input: changing them would make the resolver reject evaluation.
+const CLAIM_TERMS = {
+  windowBlocks: 1800n,
+  minSamples: 30n,
+  maxObservationGapBlocks: 60n,
+  depegLowerBound: 97_000_000n,
+  liquidityFloorBps: 10_000n,
+  deficitFloorBps: 50n,
+};
+const CLAIM_TRIGGERS = ["No covered trigger", "Reserve deficit", "Redemption failure", "Oracle failure"];
 
 const $ = (id) => document.getElementById(id);
 const setText = (id, value) => { $(id).textContent = value; };
@@ -102,6 +120,14 @@ function makeContracts(provider) {
     venue: new ethers.Contract(d.venue, ABI.venue, provider),
     resolver: new ethers.Contract(d.claimResolver, ABI.resolver, provider),
     policy: new ethers.Contract(d.coverPolicy, ABI.policy, provider),
+  };
+}
+
+function resolverTerms() {
+  return {
+    reserve: state.deployment.asset,
+    aToken: state.deployment.aToken || ZERO,
+    ...CLAIM_TERMS,
   };
 }
 
@@ -204,6 +230,7 @@ async function refresh() {
       setText("positionState", "No wallet");
       setText("positionDetails", "Connect a wallet to read your position.");
       $("exitButton").disabled = true;
+      $("claimControls").hidden = true;
     }
   } catch (error) {
     setStatus(`Live chain refresh failed: ${errorMessage(error)}`, "error");
@@ -222,9 +249,10 @@ function policyLifecycle(policy, activeFrom, coverActive, block) {
 
 async function policyHtml(policyId, block) {
   const { policy } = state.contracts;
-  const [record, activeFrom, coverActive, owner, name, symbol, tokenUri] = await Promise.all([
+  const [record, activeFrom, coverActive, owner, name, symbol, tokenUri, claimAmount, trigger] = await Promise.all([
     policy.policies(policyId), policy.activeFromBlock(policyId), policy.isCoverActive(policyId),
     policy.ownerOf(policyId), policy.name(), policy.symbol(), policy.tokenURI(policyId),
+    state.contracts.resolver.claimAmount(policyId), state.contracts.resolver.triggerOf(policyId),
   ]);
   const lifecycle = policyLifecycle(record, activeFrom, coverActive, block);
   const remaining = BigInt(activeFrom) > BigInt(block) ? BigInt(activeFrom) - BigInt(block) : 0n;
@@ -237,6 +265,11 @@ async function policyHtml(policyId, block) {
   } catch {}
   return {
     lifecycle,
+    stateValue: Number(record.state ?? record[7]),
+    coverActive,
+    activeFrom,
+    claimAmount,
+    trigger: Number(trigger),
     html: `${image ? `<img class="policy-art" src="${escapeHtml(image)}" alt="xCover Policy NFT #${policyId}" />` : ""}`
       + `<strong>${escapeHtml(name)} NFT #${policyId} (${escapeHtml(symbol)})</strong><br>`
       + `Lifecycle: <strong>${escapeHtml(lifecycle)}</strong><br>`
@@ -258,6 +291,7 @@ async function renderPosition(position, block) {
   if (!open) {
     setText("positionState", "No open position");
     setText("positionDetails", "No open covered position for this wallet.");
+    $("claimControls").hidden = true;
     return;
   }
   const shares = position.shares ?? position[1];
@@ -265,6 +299,7 @@ async function renderPosition(position, block) {
   const details = await policyHtml(policyId, block);
   setText("positionState", `NFT #${policyId} · ${details.lifecycle}`);
   $("positionDetails").innerHTML = `${details.html}<br>Vault shares: <strong>${units(shares)}</strong><br>Opened at block: <strong>${integer(openedAt)}</strong>`;
+  renderClaimControls(policyId, details, block);
 }
 
 async function lookupPolicy() {
@@ -277,6 +312,93 @@ async function lookupPolicy() {
     setStatus(`Policy NFT #${raw} loaded from X Layer.`, "success");
   } catch (error) {
     setText("policyLookupResult", `Policy lookup failed: ${errorMessage(error)}`);
+  }
+}
+
+function setClaimButtonState({ assess = true, evaluate = true, claim = true } = {}) {
+  $("assessClaimButton").disabled = assess;
+  $("evaluateClaimButton").disabled = evaluate;
+  $("claimPayoutButton").disabled = claim;
+}
+
+function renderClaimControls(policyId, details, block) {
+  const panel = $("claimControls");
+  panel.hidden = false;
+  setClaimButtonState();
+
+  if (details.stateValue === 1) {
+    if (!details.coverActive) {
+      setText("claimStatus", `Waiting period active. Claim evaluation begins at block ${integer(details.activeFrom)}.`);
+      return;
+    }
+    setClaimButtonState({ assess: false, evaluate: true, claim: true });
+    setText("claimStatus", "Cover is evaluation eligible. Check the on-chain observation window for a covered trigger.");
+    return;
+  }
+
+  if (details.stateValue === 3) {
+    setClaimButtonState({ assess: true, evaluate: true, claim: false });
+    setText("claimStatus", `Claimable: ${units(details.claimAmount)} ${CLAIM_TRIGGERS[details.trigger] || "covered trigger"}. Anyone may submit the payout transaction to the policy owner.`);
+    return;
+  }
+
+  if (details.stateValue === 4) {
+    setText("claimStatus", `Claim paid: ${units(details.claimAmount)}. Exit the covered position separately to redeem remaining Aave-backed assets.`);
+    return;
+  }
+
+  setText("claimStatus", `${details.lifecycle}. This policy has no pending payout action.`);
+}
+
+async function assessClaim() {
+  try {
+    const position = await state.contracts.vault.positions(state.account);
+    const policyId = BigInt(position.policyId ?? position[0]);
+    if (policyId === 0n) throw new Error("No open covered position found.");
+    const details = await policyHtml(policyId, await state.provider.getBlockNumber());
+    if (details.stateValue !== 1 || !details.coverActive) throw new Error("The policy is not currently eligible for evaluation.");
+    setText("claimStatus", "Checking the resolver's observation window…");
+    const result = await state.contracts.resolver.assess(policyId, resolverTerms());
+    const trigger = Number(result.trigger ?? result[0]);
+    const payout = result.payout ?? result[1];
+    if (trigger === 0) {
+      setClaimButtonState({ assess: false, evaluate: true, claim: true });
+      setText("claimStatus", "No covered trigger is established by the current on-chain observations.");
+      return;
+    }
+    setClaimButtonState({ assess: false, evaluate: false, claim: true });
+    setText("claimStatus", `Resolver found ${CLAIM_TRIGGERS[trigger] || "a covered trigger"}: estimated payout ${units(payout)}. Evaluate to make the policy Claimable.`);
+  } catch (error) {
+    setClaimButtonState({ assess: false, evaluate: true, claim: true });
+    setText("claimStatus", `Eligibility check: ${errorMessage(error)}`);
+  }
+}
+
+async function evaluateClaim() {
+  try {
+    const position = await state.contracts.vault.positions(state.account);
+    const policyId = BigInt(position.policyId ?? position[0]);
+    if (policyId === 0n) throw new Error("No open covered position found.");
+    const signer = await requireSigner();
+    const resolver = new ethers.Contract(state.deployment.claimResolver, ABI.resolver, signer);
+    await transact("Evaluate claim", () => resolver.evaluate(policyId, resolverTerms()));
+  } catch (error) {
+    setStatus(`Claim evaluation failed: ${errorMessage(error)}`, "error");
+  }
+}
+
+async function claimPayout() {
+  try {
+    const position = await state.contracts.vault.positions(state.account);
+    const policyId = BigInt(position.policyId ?? position[0]);
+    if (policyId === 0n) throw new Error("No open covered position found.");
+    const details = await policyHtml(policyId, await state.provider.getBlockNumber());
+    if (details.stateValue !== 3) throw new Error("The policy is not Claimable yet.");
+    const signer = await requireSigner();
+    const resolver = new ethers.Contract(state.deployment.claimResolver, ABI.resolver, signer);
+    await transact("Claim USDT payout", () => resolver.claim(policyId));
+  } catch (error) {
+    setStatus(`Payout claim failed: ${errorMessage(error)}`, "error");
   }
 }
 
@@ -430,6 +552,9 @@ $("recordDecisionButton").addEventListener("click", recordDecision);
 $("approveCoveredButton").addEventListener("click", async () => { try { await approveAsset(state.deployment.xCoverVault, amountFrom("coveredAmount"), "Covered deposit approval"); } catch {} });
 $("depositCoveredButton").addEventListener("click", depositCovered);
 $("exitButton").addEventListener("click", exitPosition);
+$("assessClaimButton").addEventListener("click", assessClaim);
+$("evaluateClaimButton").addEventListener("click", evaluateClaim);
+$("claimPayoutButton").addEventListener("click", claimPayout);
 $("policyLookupButton").addEventListener("click", lookupPolicy);
 $("observeButton").addEventListener("click", recordObservation);
 document.querySelectorAll("[data-open-dashboard]").forEach((element) => element.addEventListener("click", openDashboard));

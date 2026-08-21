@@ -120,6 +120,16 @@
           <p class="muted">Opening a position immediately mints a non-transferable xCover Policy NFT (XCOVER). The NFT records the owner, amount, price, term, commitments, and lifecycle; the waiting period gates claim evaluation, not withdrawal.</p>
           <div id="positionDetails" class="position-details">Connect a wallet to see your position.</div>
           <button id="exitButton" class="button danger-button" disabled>Exit full position</button>
+          <div id="claimControls" class="claim-controls" hidden>
+            <div class="eyebrow">CLAIM FLOW</div>
+            <p id="claimStatus" class="muted">The existing policy NFT becomes eligible for evaluation after its waiting period. A claim requires a covered trigger and the required observation history.</p>
+            <div class="actions">
+              <button id="assessClaimButton" class="button ghost" disabled>Check claim eligibility</button>
+              <button id="evaluateClaimButton" class="button" disabled>Evaluate claim</button>
+              <button id="claimPayoutButton" class="button primary" disabled>Claim USDT payout</button>
+            </div>
+            <small class="muted">Evaluation and payout are permissionless. The payout goes to the XCOVER NFT owner; it is not a replacement NFT.</small>
+          </div>
           <div class="divider"></div>
           <label>Look up any policy NFT by ID<input id="policyLookupId" inputmode="numeric" value="1" placeholder="1" /></label>
           <button id="policyLookupButton" class="button ghost">Load policy NFT</button>

@@ -179,6 +179,14 @@ Covered conditions are deliberately narrow and measurable:
 The AI does not approve claims. `ClaimResolver` evaluates fixed terms and calls
 the policy and pool contracts to settle a valid result.
 
+The dashboard exposes the claim path for the open policy owner: **Check claim
+eligibility** performs a read-only resolver assessment, **Evaluate claim** records
+a proven trigger and moves the existing policy NFT to `Claimable`, and **Claim
+USDT payout** settles the amount to the NFT owner. These actions become
+available only after the waiting period and required observations. The payout is
+USDT; the NFT is not burned or exchanged, and the buyer exits the Aave-backed
+position separately when they want to redeem its remaining assets.
+
 ### What the depositor receives: the XCOVER policy NFT
 
 Opening a covered deposit creates two linked records immediately:

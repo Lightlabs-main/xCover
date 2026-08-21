@@ -329,24 +329,6 @@ See [`deployments/xlayer-mainnet.json`](deployments/xlayer-mainnet.json) for
 deployment transaction hashes and [`docs/deployments.md`](docs/deployments.md)
 for the deployment history, testnet lifecycle, and corrected contract set.
 
-## Operating terms and protocol status
-
-- **Live pricing status.** Calibration remains in progress and the live engine
-  reports its provisional status publicly.
-- **Security status.** The contracts are unaudited; tests and invariants are
-  evidence of engineering work, not a substitute for an independent audit.
-- **Linked position ownership.** Existing external aUSDT positions are redeemed
-  to USDT and reopened through xCover so the Aave position, shares, and policy
-  remain contractually linked. Vault shares and policy NFTs are non-transferable
-  by design.
-- **Full-position lifecycle.** Positions support full exit only. Resizing cover
-  requires a fresh quote, so partial withdrawal is not enabled.
-- **Evidence-based settlement.** A mainnet claim requires the real waiting period,
-  observation history, and a covered Aave condition. Healthy Aave state produces
-  no payout.
-- xCover is experimental cover software, not a representation of regulated
-  insurance.
-
 ## Verification and tests
 
 The repository includes:

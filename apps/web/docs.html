@@ -114,6 +114,8 @@
               <div class="eyebrow">05 / UNDERWRITING</div>
               <h2>Capital stands behind the cover.</h2>
               <p>Underwriters approve USDT to the pool and deposit capital for pool shares. The pool is fully backed: capital must always cover outstanding cover, and new policies cannot reserve more than free capital. Premium from covered positions returns to the pool.</p>
+              <div class="callout blue-callout"><strong>How the money moves</strong><span>The buyer's USDT goes to Aave as the covered position. Underwriter USDT stays in CoverPool as reserved claim capital. If a covered trigger is proven, the resolver tells CoverPool to pay USDT to the XCOVER owner. If no claim occurs, the reservation is released and accrued premium increases pool capital and provider-share value.</span></div>
+              <div class="callout blue-callout"><strong>Underwriter economics</strong><span>Providers earn the premium paid by covered positions, but their capital is at risk if a valid claim pays. The current build has no separate xCover protocol or treasury fee; premiums go to the underwriting pool.</span></div>
             </div>
             <div class="docs-note"><strong>Two transactions</strong><span>Approve USDT, then add pool funds.</span><strong>One exit path</strong><span>Withdraw shares when capital is free.</span></div>
           </section>

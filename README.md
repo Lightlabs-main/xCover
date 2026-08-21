@@ -90,6 +90,30 @@ capital is separate from depositor assets and is not supplied to the Aave reserv
 being covered. It remains available to pay valid claims and earns premium from
 covered positions.
 
+### Where the money comes from
+
+There are two separate money buckets:
+
+1. **Buyer assets.** The buyer's USDT is supplied to Aave V3. It remains the
+   buyer's covered position and is redeemed through **Exit full position**.
+2. **Underwriter capital.** Underwriters deposit USDT into `CoverPool`. When a
+   policy opens, the pool does not send that USDT to Aave; it records an equal
+   reservation against the pool's capital. That reservation is the source of a
+   valid claim payout.
+
+When a covered trigger is proven, `ClaimResolver` calculates the payout from the
+fixed policy terms and calls `CoverPool`. The pool transfers its own USDT to the
+XCOVER NFT owner, reduces the paid obligation, and keeps the accounting fully
+backed. A claim can therefore reduce the value of underwriter shares; underwriting
+is risk capital, not guaranteed yield.
+
+When no claim occurs, the policy expires or the buyer exits, the reservation is
+released. The premium accrued on the covered position is then paid into
+`CoverPool`, increasing pool capital and the value represented by provider shares.
+The current build charges no separate xCover protocol or treasury fee: premiums
+go to the underwriting pool. xCover itself is not the claims payer and does not
+take the underwriter capital.
+
 Underwriters can track:
 
 - total pool capital;

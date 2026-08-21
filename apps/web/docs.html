@@ -77,6 +77,7 @@
               <div><strong>When it is minted</strong><span>In the same atomic transaction that supplies USDT to Aave and reserves matching underwriting capacity—not after 24 hours.</span></div>
               <div><strong>What happens after 24 hours</strong><span>No new token appears. The existing policy becomes eligible for deterministic claim evaluation once sufficient observations exist.</span></div>
               <div><strong>What a valid claim pays</strong><span>The resolver marks the existing policy Claimable and settles the covered amount due in USDT from the underwriting pool; the claim is not another token.</span></div>
+              <div><strong>What does not happen</strong><span>The NFT is not sold, transferable, burned, or exchanged for the payout. After settlement it remains in the owner's wallet with state Paid.</span></div>
               <div><strong>Why it cannot transfer</strong><span>The NFT and address-keyed vault position must stay under the same owner so withdrawal and cover cannot diverge.</span></div>
               <div><strong>What exit does</strong><span>An immediate full exit is allowed. It unwinds the Aave position and changes an untriggered policy to Cancelled while preserving its on-chain history.</span></div>
             </div>
@@ -133,7 +134,8 @@
             <div class="eyebrow">07 / CLAIMS</div>
             <h2>Observations create the evidence trail.</h2>
             <p>Anyone can publish a fresh reserve observation. The resolver reads the venue and Aave state itself, so the observer chooses when to sample but cannot choose the values. The deterministic resolver evaluates the recorded evidence against the policy terms and pays according to the covered trigger; an AI model or privileged keeper does not decide whether a claim is valid.</p>
-            <div class="callout blue-callout"><strong>Waiting and observation</strong><span>Mainnet cover waits approximately 24 hours in blocks before activation, then requires the defined observation window and 30 samples before a claim can be evaluated.</span></div>
+            <div class="callout blue-callout"><strong>In plain language</strong><span>An observation is one contract-read snapshot of Aave's deficit, price, redeemable liquidity, and supplied assets. Anyone can publish it with Update reserve, but cannot choose the values. Mainnet cover waits approximately 24 hours in blocks before activation, then requires an approximately 30-minute window with at least 30 samples.</span></div>
+            <div class="callout blue-callout"><strong>What counts as a trigger</strong><span>Waiting alone is not a claim. A trigger means the required samples prove a material reserve deficit, sustained inability to redeem, or sustained oracle/depeg condition. If Aave remains healthy, the resolver reports no covered trigger and pays nothing.</span></div>
             <div class="docs-table">
               <div><strong>Reserve deficit</strong><span>A material Aave deficit is measured as a share of total supplied assets and pays the policy's pro-rata shortfall.</span></div>
               <div><strong>Redemption failure</strong><span>Sustained liquidity below the policy threshold triggers the deployed full-cover redemption-failure path.</span></div>

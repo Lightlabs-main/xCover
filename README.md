@@ -164,9 +164,25 @@ but a claim cannot be evaluated until activation. This reduces adverse selection
 from users attempting to buy cover after an incident becomes visible.
 
 After activation, the deployed mainnet terms require an approximately 30-minute
-observation window, at least 30 samples, and bounded gaps between samples. Anyone
-may publish observations, but the deterministic resolver decides whether the
-recorded values satisfy the policy terms.
+observation window, at least 30 samples, and bounded gaps between samples. An
+**observation** is one on-chain snapshot of the Aave reserve: its deficit, oracle
+price, redeemable liquidity, and total supplied assets. Anyone may click **Update
+reserve** to publish a sample, but the contract reads the values directly from
+Aave; the caller cannot invent them. Thirty samples show whether a condition was
+sustained over the window rather than visible for only one block.
+
+A **covered trigger** is a measurable loss condition that held across the
+required observations. It is not simply “the user waited 24 hours.” The current
+triggers are:
+
+- a material Aave reserve deficit;
+- sustained redeemable liquidity below the policy threshold; or
+- a sustained oracle price/depeg condition.
+
+If the reserve stays healthy, the resolver returns **no covered trigger** and no
+payout is created. If one condition is proven, the resolver computes the payout
+from the fixed policy terms and can move the existing policy to `Claimable`.
+Waiting makes evaluation possible; it does not guarantee a claim.
 
 Covered conditions are deliberately narrow and measurable:
 
@@ -184,8 +200,9 @@ eligibility** performs a read-only resolver assessment, **Evaluate claim** recor
 a proven trigger and moves the existing policy NFT to `Claimable`, and **Claim
 USDT payout** settles the amount to the NFT owner. These actions become
 available only after the waiting period and required observations. The payout is
-USDT; the NFT is not burned or exchanged, and the buyer exits the Aave-backed
-position separately when they want to redeem its remaining assets.
+USDT; the NFT is not sold, transferable, burned, or exchanged for the payout.
+After payment it remains in the owner's wallet with state `Paid`. The buyer exits
+the Aave-backed position separately when they want to redeem its remaining assets.
 
 ### What the depositor receives: the XCOVER policy NFT
 
@@ -196,7 +213,9 @@ Opening a covered deposit creates two linked records immediately:
 - an ERC-721 named **xCover Policy**, symbol **XCOVER**, whose token ID is the
   policy ID.
 
-The NFT is the on-chain cover certificate. Its policy record fixes the owner,
+The NFT is the on-chain cover certificate. It is never sold or redeemed for the
+deposit: it is a non-transferable record that stays with the policy owner through
+the claim lifecycle. Its policy record fixes the owner,
 reserve, covered amount, start and end blocks, premium rate, signed-quote hash,
 terms hash, and lifecycle state. It is minted during the same atomic transaction
 that supplies USDT to Aave and reserves underwriting capital. The dashboard can
@@ -208,7 +227,8 @@ embedded Base64 SVG. Wallets and explorers therefore need no centralized image
 server to render the XCOVER card, and its displayed lifecycle metadata updates
 when the policy becomes claimable, paid, expired, or cancelled.
 
-The 24-hour waiting period does **not** mint another token and does not lock the
+The 24-hour waiting period does **not** mint another token, sell or burn the
+existing NFT, and does not lock the
 deposit. The existing XCOVER NFT moves through a contract-controlled lifecycle:
 
 `Active (waiting) → evaluation eligible → Claimable → Paid`
@@ -219,7 +239,8 @@ has passed and the resolver may evaluate sufficient observations; it does not
 mean a loss has occurred or that a payout is already owed. If a covered trigger
 is proven, the resolver marks the policy `Claimable` and settles the valid payout
 to the policy holder in **USDT** from the underwriting pool. The user does not
-claim a new token after 24 hours.
+claim a new token after 24 hours, and the existing NFT is not burned by the
+claim.
 
 ### 7. Exit
 

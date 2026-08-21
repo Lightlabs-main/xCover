@@ -19,15 +19,22 @@ function jsonSafe(value: unknown): unknown {
   return value;
 }
 
-function send(response: ServerResponse, status: number, body: unknown, contentType = "application/json"): void {
+function send(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+  contentType = "application/json",
+  head = false,
+): void {
   const payload = typeof body === "string" ? body : JSON.stringify(jsonSafe(body));
   response.writeHead(status, {
     "content-type": `${contentType}; charset=utf-8`,
+    "content-length": String(Buffer.byteLength(payload)),
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET,POST,OPTIONS",
   });
-  response.end(payload);
+  response.end(head ? undefined : payload);
 }
 
 const DASHBOARD_FILES: Record<string, { file: string; contentType: string }> = {
@@ -35,11 +42,17 @@ const DASHBOARD_FILES: Record<string, { file: string; contentType: string }> = {
   "/index.html": { file: "index.html", contentType: "text/html" },
   "/docs": { file: "docs.html", contentType: "text/html" },
   "/docs/": { file: "docs.html", contentType: "text/html" },
+  "/docs.html": { file: "docs.html", contentType: "text/html" },
+  "/about": { file: "about.html", contentType: "text/html" },
+  "/about/": { file: "about.html", contentType: "text/html" },
+  "/about.html": { file: "about.html", contentType: "text/html" },
   "/app.js": { file: "app.js", contentType: "text/javascript" },
   "/styles.css": { file: "styles.css", contentType: "text/css" },
+  "/favicon.svg": { file: "favicon.svg", contentType: "image/svg+xml" },
+  "/favicon.ico": { file: "favicon.svg", contentType: "image/svg+xml" },
 };
 
-async function serveDashboard(pathname: string, response: ServerResponse): Promise<boolean> {
+async function serveDashboard(pathname: string, response: ServerResponse, head: boolean): Promise<boolean> {
   const requested = DASHBOARD_FILES[pathname];
   if (!requested) return false;
   const candidateRoots = [resolve(process.cwd(), "apps/web"), resolve(process.cwd(), "../../apps/web")];
@@ -48,7 +61,7 @@ async function serveDashboard(pathname: string, response: ServerResponse): Promi
   const file = resolve(root, requested.file);
   if (!file.startsWith(`${root}/`)) return false;
   try {
-    send(response, 200, await readFile(file, "utf8"), requested.contentType);
+    send(response, 200, await readFile(file, "utf8"), requested.contentType, head);
     return true;
   } catch {
     return false;
@@ -170,9 +183,10 @@ export async function startServer(
         return;
       }
       const url = new URL(request.url ?? "/", "http://localhost");
-      if (request.method === "GET" && await serveDashboard(url.pathname, response)) return;
+      const head = request.method === "HEAD";
+      if ((request.method === "GET" || head) && await serveDashboard(url.pathname, response, head)) return;
       if (url.pathname === "/rpc" && await proxyRpc(request, response, config)) return;
-      if (request.method === "GET" && url.pathname === "/health") {
+      if ((request.method === "GET" || head) && url.pathname === "/health") {
         send(response, 200, {
           status: "ok",
           mode: config.mode,
@@ -188,24 +202,24 @@ export async function startServer(
           chainId: config.chainId,
           venue: config.deployment.venueName,
           corpusEntries: agent.corpusSize,
-        });
+        }, "application/json", head);
         return;
       }
-      if (request.method === "GET" && url.pathname === "/deployment") {
-        send(response, 200, { ...config.deployment, rpcUrl: config.rpcUrl, mode: config.mode });
+      if ((request.method === "GET" || head) && url.pathname === "/deployment") {
+        send(response, 200, { ...config.deployment, rpcUrl: config.rpcUrl, mode: config.mode }, "application/json", head);
         return;
       }
       const decisionMatch = url.pathname.match(/^\/decision\/(0x[0-9a-fA-F]{64})$/);
-      if (request.method === "GET" && decisionMatch) {
+      if ((request.method === "GET" || head) && decisionMatch) {
         // Hashes are content addresses, not identifiers the caller chose; a hash typed or
         // pasted in upper case addresses the same decision document.
         const hash = decisionMatch[1].toLowerCase() as `0x${string}`;
         const document = await agent.getDecision(hash);
         if (!document) {
-          send(response, 404, { error: "decision not found" });
+          send(response, 404, { error: "decision not found" }, "application/json", head);
           return;
         }
-        send(response, 200, document);
+        send(response, 200, document, "application/json", head);
         return;
       }
       if (request.method === "POST" && url.pathname === "/decision") {
@@ -221,11 +235,11 @@ export async function startServer(
         });
         return;
       }
-      send(response, 404, { error: "not found" });
+      send(response, 404, { error: "not found" }, "application/json", head);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const status = message.includes("request") || message.includes("coverAmount") || message.includes("reserve") ? 400 : 503;
-      send(response, status, { error: message });
+      send(response, status, { error: message }, "application/json", request.method === "HEAD");
     }
   });
   const port = options.port ?? Number(process.env.PORT ?? 8787);

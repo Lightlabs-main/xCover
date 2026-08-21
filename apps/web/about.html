@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1f44" />
+    <meta name="description" content="About xCover: AI-priced, fully backed cover for Aave V3 USDT positions on X Layer." />
+    <title>About xCover · AI-priced Aave V3 cover</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="docs-page">
+    <main class="shell docs-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="xCover home">
+          <span class="brand-mark">×</span>
+          <span class="brand-name">xCover</span>
+          <span class="brand-tag">ABOUT THE BUILD</span>
+        </a>
+        <div class="top-actions">
+          <span class="wallet-state"><span class="live-dot"></span><span id="aboutNetwork">X Layer mainnet</span></span>
+          <a class="button primary" href="/#dashboard">Open dashboard</a>
+        </div>
+      </header>
+
+      <section class="docs-hero">
+        <div>
+          <div class="eyebrow light">AI / AAVE V3 / X LAYER</div>
+          <h1>Cover that starts with evidence.</h1>
+          <p>xCover connects an AI-priced risk decision to a real Aave V3 USDT position and fully reserved underwriting capital. The agent prices risk; the contracts control the money.</p>
+        </div>
+        <div class="docs-live-card">
+          <div class="eyebrow light">LIVE DEPLOYMENT</div>
+          <strong id="aboutMode">Loading…</strong>
+          <span id="aboutVenue">Checking deployment…</span>
+          <span>Chain 196 · X Layer mainnet</span>
+        </div>
+      </section>
+
+      <article class="docs-article about-article">
+        <section class="docs-section">
+          <div class="eyebrow">01 / THE IDEA</div>
+          <h2>AI pricing for the risk around an Aave position.</h2>
+          <p>Aave depositors see yield, but the reserve, liquidity, oracle, and integration risks around that yield are not given a live cover price. xCover makes cover part of opening the position: the pricing agent reads live protocol state and cited evidence, then returns an attributable signed price or refusal.</p>
+          <div class="docs-flow">
+            <div><span>01</span><strong>Read</strong><small>Live Aave reserve and pool evidence</small></div>
+            <div><span>02</span><strong>Price</strong><small>Two assessments, deterministic premium</small></div>
+            <div><span>03</span><strong>Enforce</strong><small>Vault, policy, pool, and resolver contracts</small></div>
+          </div>
+        </section>
+
+        <section class="docs-section">
+          <div class="eyebrow">02 / TWO PARTICIPANTS</div>
+          <h2>Depositors buy cover. Underwriters back it.</h2>
+          <div class="docs-table">
+            <div><strong>Depositors</strong><span>Request an AI price, open a covered USDT position through xCover, receive linked vault shares and an XCOVER policy NFT, and can later claim valid USDT payouts or exit the Aave-backed position.</span></div>
+            <div><strong>Underwriters</strong><span>Deposit USDT into CoverPool, receive pool shares, earn premiums from covered positions, and provide the capital reserved behind valid claims.</span></div>
+            <div><strong>Separate capital</strong><span>Buyer USDT is supplied to Aave. Underwriter USDT stays in CoverPool and is never supplied into the reserve it covers.</span></div>
+            <div><strong>Current economics</strong><span>Premiums increase pool capital and provider-share value. Valid claims can reduce underwriter capital. The current release charges no separate xCover protocol fee.</span></div>
+          </div>
+        </section>
+
+        <section class="docs-section">
+          <div class="eyebrow">03 / THE POLICY NFT</div>
+          <h2>An on-chain policy certificate, not a payout coupon.</h2>
+          <p>Each successful covered deposit immediately mints a non-transferable ERC-721 named <strong>xCover Policy</strong>, symbol <strong>XCOVER</strong>. Its policy record fixes the owner, reserve, amount, term, premium, quote hash, terms hash, and lifecycle. Its metadata and SVG artwork are generated entirely on-chain.</p>
+          <div class="callout blue-callout"><strong>Important</strong><span>The NFT is never sold, transferred, burned, or exchanged for USDT. A successful claim changes it to <strong>Paid</strong> and pays USDT to its owner. The buyer exits the Aave position separately to redeem remaining assets.</span></div>
+        </section>
+
+        <section class="docs-section">
+          <div class="eyebrow">04 / WHEN COVER PAYS</div>
+          <h2>Waiting is not a claim.</h2>
+          <p>Mainnet waits 86,400 blocks—approximately 24 hours—to reduce adverse selection. After activation, anyone can publish observations: contract-read snapshots of Aave’s deficit, oracle price, redeemable liquidity, and supplied assets. The current terms require at least 30 samples across an approximately 30-minute window.</p>
+          <div class="docs-table">
+            <div><strong>No trigger</strong><span>If Aave remains healthy, evaluation returns no covered trigger and no payout is created.</span></div>
+            <div><strong>Covered trigger</strong><span>A sustained material reserve deficit, inability to redeem, or oracle/depeg failure is proven by the required samples.</span></div>
+            <div><strong>Settlement</strong><span>The dashboard lets the user check eligibility, evaluate a proven trigger, and claim USDT. The existing NFT remains in the owner’s wallet.</span></div>
+          </div>
+        </section>
+
+        <section class="docs-section">
+          <div class="eyebrow">05 / BUILD STATUS</div>
+          <h2>Live, provisional, and transparent about its limits.</h2>
+          <div class="docs-table">
+            <div><strong>Live system</strong><span>Aave V3 USDT integration, AI pricing, signed decisions, underwriting pool, policy NFT, permissionless observations, claim resolver, and claim UI.</span></div>
+            <div><strong>Contract controls</strong><span>Full backing, daily capacity limits, quote expiry, one-time use, non-transferability, safe early exit, and separated authority.</span></div>
+            <div><strong>Current boundary</strong><span>Existing external aUSDT balances must be redeemed to USDT and reopened through xCover; arbitrary external aToken balances are not retroactively covered.</span></div>
+            <div><strong>Disclosure</strong><span>Pricing is provisional and the contracts are unaudited. This is experimental software, not regulated insurance.</span></div>
+          </div>
+        </section>
+
+        <div class="docs-endcap">
+          <a class="button primary" href="/#dashboard">Open the live dashboard <span>↗</span></a>
+          <a class="button" href="/docs">Read the full documentation <span>↗</span></a>
+          <a class="text-link dark-link" href="https://github.com/Lightlabs-main/xCover" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
+        </div>
+      </article>
+
+      <footer><span>xCover · AI pricing for Aave V3 cover on X Layer</span><span><a href="/">Home</a> <a href="/docs">Docs</a> <a href="/#dashboard">Dashboard</a></span></footer>
+    </main>
+    <script>
+      Promise.all([fetch("/health").then((r) => r.json()), fetch("/deployment").then((r) => r.json())])
+        .then(([health, deployment]) => {
+          document.getElementById("aboutMode").textContent = health.calibration?.unaudited ? `${health.mode.replaceAll("_", " ")} · unaudited` : `${health.mode.replaceAll("_", " ")} · live`;
+          document.getElementById("aboutVenue").textContent = deployment.venueName;
+        })
+        .catch(() => { document.getElementById("aboutMode").textContent = "Live status unavailable"; });
+    </script>
+  </body>
+</html>

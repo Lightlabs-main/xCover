@@ -26,6 +26,12 @@ const ABI = {
     "function observeReserve(address,address) view returns (uint256 deficit,uint256 price,uint256 redeemableLiquidity,uint256 totalSupplied)",
   ],
   resolver: ["function recordObservation(address,address) returns (uint256)"],
+  policy: [
+    "function name() view returns (string)", "function symbol() view returns (string)",
+    "function ownerOf(uint256) view returns (address)", "function nextPolicyId() view returns (uint256)",
+    "function policies(uint256) view returns (address reserve,uint256 coverAmount,uint64 startBlock,uint64 endBlock,uint256 premiumRateRay,bytes32 quoteHash,bytes32 termsHash,uint8 state)",
+    "function activeFromBlock(uint256) view returns (uint64)", "function isCoverActive(uint256) view returns (bool)",
+  ],
 };
 
 const state = {
@@ -94,6 +100,7 @@ function makeContracts(provider) {
     vault: new ethers.Contract(d.xCoverVault, ABI.vault, provider),
     venue: new ethers.Contract(d.venue, ABI.venue, provider),
     resolver: new ethers.Contract(d.claimResolver, ABI.resolver, provider),
+    policy: new ethers.Contract(d.coverPolicy, ABI.policy, provider),
   };
 }
 
@@ -190,7 +197,7 @@ async function refresh() {
       const balance = await asset.balanceOf(state.account);
       setText("balanceLabel", `USDT balance ${units(balance)}`);
       const position = await vault.positions(state.account);
-      renderPosition(position);
+      await renderPosition(position, block);
     } else {
       setText("balanceLabel", "USDT balance -");
       setText("positionState", "No wallet");
@@ -202,20 +209,68 @@ async function refresh() {
   }
 }
 
-function renderPosition(position) {
+const POLICY_STATES = ["Unknown", "Active", "Expired", "Claimable", "Paid", "Cancelled"];
+
+function policyLifecycle(policy, activeFrom, coverActive, block) {
+  const stateValue = Number(policy.state ?? policy[7]);
+  if (stateValue !== 1) return POLICY_STATES[stateValue] || `State ${stateValue}`;
+  if (BigInt(block) < BigInt(activeFrom)) return "Waiting period";
+  if (coverActive) return "Evaluation eligible";
+  return BigInt(block) > BigInt(policy.endBlock ?? policy[3]) ? "Term ended" : "Active";
+}
+
+async function policyHtml(policyId, block) {
+  const { policy } = state.contracts;
+  const [record, activeFrom, coverActive, owner, name, symbol] = await Promise.all([
+    policy.policies(policyId), policy.activeFromBlock(policyId), policy.isCoverActive(policyId),
+    policy.ownerOf(policyId), policy.name(), policy.symbol(),
+  ]);
+  const lifecycle = policyLifecycle(record, activeFrom, coverActive, block);
+  const remaining = BigInt(activeFrom) > BigInt(block) ? BigInt(activeFrom) - BigInt(block) : 0n;
+  const quoteHash = record.quoteHash ?? record[5];
+  const termsHash = record.termsHash ?? record[6];
+  return {
+    lifecycle,
+    html: `<strong>${escapeHtml(name)} NFT #${policyId} (${escapeHtml(symbol)})</strong><br>`
+      + `Lifecycle: <strong>${escapeHtml(lifecycle)}</strong><br>`
+      + `Owner: <a href="${explorer(owner)}" target="_blank" rel="noreferrer">${escapeHtml(short(owner))} ↗</a><br>`
+      + `Covered amount: <strong>${units(record.coverAmount ?? record[1])}</strong><br>`
+      + `Claim evaluation from block: <strong>${integer(activeFrom)}</strong>${remaining ? ` (${integer(remaining)} blocks remaining)` : ""}<br>`
+      + `Term ends at block: <strong>${integer(record.endBlock ?? record[3])}</strong><br>`
+      + `Premium: <strong>${formatRate(record.premiumRateRay ?? record[4])}</strong><br>`
+      + `Quote commitment: <strong title="${quoteHash}">${escapeHtml(short(quoteHash))}</strong><br>`
+      + `Terms commitment: <strong title="${termsHash}">${escapeHtml(short(termsHash))}</strong><br>`
+      + `<a href="${explorer(state.deployment.coverPolicy)}" target="_blank" rel="noreferrer">Verify XCOVER contract ↗</a>`,
+  };
+}
+
+async function renderPosition(position, block) {
   const policyId = BigInt(position.policyId ?? position[0]);
   const open = policyId !== 0n;
-  setText("positionState", open ? `Policy #${policyId}` : "No open position");
   $("exitButton").disabled = !open;
   if (!open) {
+    setText("positionState", "No open position");
     setText("positionDetails", "No open covered position for this wallet.");
     return;
   }
   const shares = position.shares ?? position[1];
-  const coverAmount = position.coverAmount ?? position[2];
-  const premiumRate = position.premiumRateRay ?? position[3];
   const openedAt = position.openedAtBlock ?? position[4];
-  $("positionDetails").innerHTML = `<strong>Policy #${policyId}</strong><br>Covered amount: <strong>${units(coverAmount)}</strong><br>Vault shares: <strong>${units(shares)}</strong><br>Premium: <strong>${formatRate(premiumRate)}</strong><br>Opened at block: <strong>${integer(openedAt)}</strong>`;
+  const details = await policyHtml(policyId, block);
+  setText("positionState", `NFT #${policyId} · ${details.lifecycle}`);
+  $("positionDetails").innerHTML = `${details.html}<br>Vault shares: <strong>${units(shares)}</strong><br>Opened at block: <strong>${integer(openedAt)}</strong>`;
+}
+
+async function lookupPolicy() {
+  try {
+    const raw = $("policyLookupId").value.trim();
+    if (!/^\d+$/.test(raw) || BigInt(raw) === 0n) throw new Error("Enter a valid policy ID.");
+    const block = await state.provider.getBlockNumber();
+    const details = await policyHtml(BigInt(raw), block);
+    $("policyLookupResult").innerHTML = details.html;
+    setStatus(`Policy NFT #${raw} loaded from X Layer.`, "success");
+  } catch (error) {
+    setText("policyLookupResult", `Policy lookup failed: ${errorMessage(error)}`);
+  }
 }
 
 function amountFrom(id) {
@@ -303,7 +358,7 @@ async function depositCovered() {
     const signer = await requireSigner();
     const vault = new ethers.Contract(state.deployment.xCoverVault, ABI.vault, signer);
     await transact("Covered deposit", () => vault.depositCovered(amount, state.account, state.decision.quoteHash, term));
-    setStatus("Covered position opened. Your position is now active.", "success");
+    setStatus("Covered position opened. The XCOVER policy NFT is minted now; claim evaluation starts after its waiting period.", "success");
   } catch (error) {
     setStatus(`Covered deposit failed: ${errorMessage(error)}`, "error");
   }
@@ -368,6 +423,7 @@ $("recordDecisionButton").addEventListener("click", recordDecision);
 $("approveCoveredButton").addEventListener("click", async () => { try { await approveAsset(state.deployment.xCoverVault, amountFrom("coveredAmount"), "Covered deposit approval"); } catch {} });
 $("depositCoveredButton").addEventListener("click", depositCovered);
 $("exitButton").addEventListener("click", exitPosition);
+$("policyLookupButton").addEventListener("click", lookupPolicy);
 $("observeButton").addEventListener("click", recordObservation);
 document.querySelectorAll("[data-open-dashboard]").forEach((element) => element.addEventListener("click", openDashboard));
 if (window.location.hash === "#dashboard") openDashboard();

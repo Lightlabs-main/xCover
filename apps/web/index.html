@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0b1f44" />
     <meta name="description" content="xCover is cover for Aave V3 depositors on X Layer, backed by an open USDT underwriting pool." />
     <title>xCover: Aave V3 depositor cover on X Layer</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -115,9 +116,14 @@
 
       <section class="grid two-col lower-grid">
         <article class="card panel">
-          <div class="section-head"><div><div class="eyebrow">YOUR COVER</div><h2>Current position</h2></div><span class="pill" id="positionState">No wallet</span></div>
+          <div class="section-head"><div><div class="eyebrow">YOUR COVER</div><h2>Policy NFT &amp; covered position</h2></div><span class="pill" id="positionState">No wallet</span></div>
+          <p class="muted">Opening a position immediately mints a non-transferable xCover Policy NFT (XCOVER). The NFT records the owner, amount, price, term, commitments, and lifecycle; the waiting period gates claim evaluation, not withdrawal.</p>
           <div id="positionDetails" class="position-details">Connect a wallet to see your position.</div>
           <button id="exitButton" class="button danger-button" disabled>Exit full position</button>
+          <div class="divider"></div>
+          <label>Look up any policy NFT by ID<input id="policyLookupId" inputmode="numeric" value="1" placeholder="1" /></label>
+          <button id="policyLookupButton" class="button ghost">Load policy NFT</button>
+          <div id="policyLookupResult" class="position-details">Exited and cancelled policies remain verifiable here.</div>
         </article>
         <article class="card panel">
           <div class="section-head"><div><div class="eyebrow">RESERVE UPDATE</div><h2>Keep the reserve current</h2></div><span class="pill blue-pill">Open to everyone</span></div>

@@ -179,6 +179,35 @@ Covered conditions are deliberately narrow and measurable:
 The AI does not approve claims. `ClaimResolver` evaluates fixed terms and calls
 the policy and pool contracts to settle a valid result.
 
+### What the depositor receives: the XCOVER policy NFT
+
+Opening a covered deposit creates two linked records immediately:
+
+- non-transferable vault shares representing the USDT supplied through xCover to
+  Aave V3; and
+- an ERC-721 named **xCover Policy**, symbol **XCOVER**, whose token ID is the
+  policy ID.
+
+The NFT is the on-chain cover certificate. Its policy record fixes the owner,
+reserve, covered amount, start and end blocks, premium rate, signed-quote hash,
+terms hash, and lifecycle state. It is minted during the same atomic transaction
+that supplies USDT to Aave and reserves underwriting capital. The dashboard can
+read an open wallet position automatically and can look up any policy by ID,
+including a policy retained as a cancelled historical record after exit.
+
+The 24-hour waiting period does **not** mint another token and does not lock the
+deposit. The existing XCOVER NFT moves through a contract-controlled lifecycle:
+
+`Active (waiting) → evaluation eligible → Claimable → Paid`
+
+An untriggered policy may instead become `Expired` at the end of its term or
+`Cancelled` when the owner exits. “Evaluation eligible” means the waiting period
+has passed and the resolver may evaluate sufficient observations; it does not
+mean a loss has occurred or that a payout is already owed. If a covered trigger
+is proven, the resolver marks the policy `Claimable` and settles the valid payout
+to the policy holder in **USDT** from the underwriting pool. The user does not
+claim a new token after 24 hours.
+
 ### 7. Exit
 
 The position owner may exit the full position. The vault redeems from Aave,

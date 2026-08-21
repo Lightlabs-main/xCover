@@ -46,6 +46,7 @@
           <a href="#overview">Overview</a>
           <a href="#existing-aave">Existing Aave suppliers</a>
           <a href="#depositor">For depositors</a>
+          <a href="#policy-nft">Policy NFT</a>
           <a href="#underwriter">For underwriters</a>
           <a href="#pricing">AI pricing</a>
           <a href="#claims">When cover pays</a>
@@ -66,8 +67,23 @@
             </div>
           </section>
 
+          <section id="policy-nft" class="docs-section">
+            <div class="eyebrow">02 / POLICY NFT</div>
+            <h2>The XCOVER NFT is the on-chain cover certificate.</h2>
+            <p>Every successful covered deposit immediately mints an ERC-721 named <strong>xCover Policy</strong>, symbol <strong>XCOVER</strong>. Its token ID is the policy ID. The associated on-chain record fixes the owner, reserve, covered amount, start and end blocks, premium rate, signed-quote hash, terms hash, and lifecycle state.</p>
+            <div class="docs-table">
+              <div><strong>What the buyer receives</strong><span>Linked vault shares for the Aave-supplied USDT position and one XCOVER policy NFT for its cover terms.</span></div>
+              <div><strong>When it is minted</strong><span>In the same atomic transaction that supplies USDT to Aave and reserves matching underwriting capacity—not after 24 hours.</span></div>
+              <div><strong>What happens after 24 hours</strong><span>No new token appears. The existing policy becomes eligible for deterministic claim evaluation once sufficient observations exist.</span></div>
+              <div><strong>What a valid claim pays</strong><span>The resolver marks the existing policy Claimable and settles the covered amount due in USDT from the underwriting pool; the claim is not another token.</span></div>
+              <div><strong>Why it cannot transfer</strong><span>The NFT and address-keyed vault position must stay under the same owner so withdrawal and cover cannot diverge.</span></div>
+              <div><strong>What exit does</strong><span>An immediate full exit is allowed. It unwinds the Aave position and changes an untriggered policy to Cancelled while preserving its on-chain history.</span></div>
+            </div>
+            <div class="callout blue-callout"><strong>Lifecycle</strong><span>Active (waiting) → evaluation eligible → Claimable → Paid. An untriggered policy can instead end as Expired or Cancelled. Evaluation eligible is not the same as having a payable claim.</span></div>
+          </section>
+
           <section id="existing-aave" class="docs-section">
-            <div class="eyebrow">02 / EXISTING AAVE SUPPLIERS</div>
+            <div class="eyebrow">03 / EXISTING AAVE SUPPLIERS</div>
             <h2>Move the amount you want protected into a linked position.</h2>
             <p>An existing Aave V3 supplier can redeem the amount they want to protect from their direct Aave position back to USDT, request an xCover decision for that amount, and reopen it through xCover. The result is still a real Aave V3 supply position, but its owner, signed quote, premium, policy, and underwriting reservation are now linked by the xCover contracts.</p>
             <ol class="docs-steps">
@@ -79,7 +95,7 @@
           </section>
 
           <section id="depositor" class="docs-section">
-            <div class="eyebrow">03 / DEPOSITOR FLOW</div>
+            <div class="eyebrow">04 / DEPOSITOR FLOW</div>
             <h2>Open a covered USDT deposit.</h2>
             <ol class="docs-steps">
               <li><strong>Connect on X Layer.</strong> The dashboard checks the wallet network and offers to add or switch to chain 196.</li>
@@ -93,7 +109,7 @@
 
           <section id="underwriter" class="docs-section split-docs">
             <div>
-              <div class="eyebrow">04 / UNDERWRITING</div>
+              <div class="eyebrow">05 / UNDERWRITING</div>
               <h2>Capital stands behind the cover.</h2>
               <p>Underwriters approve USDT to the pool and deposit capital for pool shares. The pool is fully backed: capital must always cover outstanding cover, and new policies cannot reserve more than free capital. Premium from covered positions returns to the pool.</p>
             </div>
@@ -101,7 +117,7 @@
           </section>
 
           <section id="pricing" class="docs-section">
-            <div class="eyebrow">05 / AI PRICING</div>
+            <div class="eyebrow">06 / AI PRICING</div>
             <h2>The agent recommends; deterministic code and contracts enforce.</h2>
             <p>The pricing service reads the live Aave reserve, oracle, liquidity, utilization, reserve configuration, pool capital, and outstanding cover. It retrieves cited evidence and runs two independent model assessments. Those assessments produce hazard factors, uncertainty, confidence, concerns, missing facts, and cited conclusions; deterministic code computes the premium and applies the configured operating bounds.</p>
             <div class="docs-table">
@@ -113,7 +129,7 @@
           </section>
 
           <section id="claims" class="docs-section">
-            <div class="eyebrow">06 / CLAIMS</div>
+            <div class="eyebrow">07 / CLAIMS</div>
             <h2>Observations create the evidence trail.</h2>
             <p>Anyone can publish a fresh reserve observation. The resolver reads the venue and Aave state itself, so the observer chooses when to sample but cannot choose the values. The deterministic resolver evaluates the recorded evidence against the policy terms and pays according to the covered trigger; an AI model or privileged keeper does not decide whether a claim is valid.</p>
             <div class="callout blue-callout"><strong>Waiting and observation</strong><span>Mainnet cover waits approximately 24 hours in blocks before activation, then requires the defined observation window and 30 samples before a claim can be evaluated.</span></div>
@@ -126,7 +142,7 @@
           </section>
 
           <section id="controls" class="docs-section">
-            <div class="eyebrow">07 / CONTROLS</div>
+            <div class="eyebrow">08 / CONTROLS</div>
             <h2>Refusal is a valid outcome.</h2>
             <div class="docs-table">
               <div><strong>Live Aave V3 integration</strong><span>Mainnet positions are supplied to the configured Aave V3 USDT reserve and reserve conditions are read from live sources.</span></div>
@@ -143,14 +159,14 @@
           </section>
 
           <section id="contracts" class="docs-section">
-            <div class="eyebrow">08 / LIVE DEPLOYMENT</div>
+            <div class="eyebrow">09 / LIVE DEPLOYMENT</div>
             <h2>Verify what you are using.</h2>
             <p>These addresses are loaded from the same deployment record that powers the dashboard.</p>
             <div id="contractList" class="contract-list"><span>Loading live contract addresses…</span></div>
           </section>
 
           <section id="limitations" class="docs-section">
-            <div class="eyebrow">09 / CURRENT LIMITATIONS</div>
+            <div class="eyebrow">10 / CURRENT LIMITATIONS</div>
             <h2>What this release does not claim.</h2>
             <div class="docs-table">
               <div><strong>Provisional pricing</strong><span>Calibration is still in progress and the live service reports that status publicly.</span></div>

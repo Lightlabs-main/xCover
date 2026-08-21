@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0b1f44" />
     <meta name="description" content="How xCover prices and records Aave V3 depositor cover on X Layer." />
     <title>How xCover works · xCover</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -27,9 +28,9 @@
 
       <section class="docs-hero">
         <div>
-          <div class="eyebrow light">THE xCOVER PRODUCT</div>
-          <h1>Cover for an Aave V3 position, with the decision in plain sight.</h1>
-          <p>xCover reads live reserve evidence, signs a price or refusal, and lets the wallet and contracts enforce the final position. Capital providers supply the pool behind the cover.</p>
+          <div class="eyebrow light">AUTONOMOUS AI RISK PRICING</div>
+          <h1>An AI pricing agent for covered Aave V3 positions.</h1>
+          <p>The xCover agent reads live Aave V3 and underwriting state, retrieves cited risk evidence, runs two independent assessments, and signs a price or refusal. Deterministic code computes the premium; wallets and contracts enforce the position, backing, and claim rules.</p>
         </div>
         <div class="docs-live-card">
           <div class="eyebrow light">LIVE STATUS</div>
@@ -43,70 +44,123 @@
         <aside class="docs-toc" aria-label="On this page">
           <div class="eyebrow">ON THIS PAGE</div>
           <a href="#overview">Overview</a>
+          <a href="#existing-aave">Existing Aave suppliers</a>
           <a href="#depositor">For depositors</a>
           <a href="#underwriter">For underwriters</a>
+          <a href="#pricing">AI pricing</a>
           <a href="#claims">When cover pays</a>
           <a href="#controls">Controls and limits</a>
           <a href="#contracts">Live contracts</a>
+          <a href="#limitations">Current limitations</a>
         </aside>
 
         <article class="docs-article">
           <section id="overview" class="docs-section">
             <div class="eyebrow">01 / OVERVIEW</div>
-            <h2>Three responsibilities, kept separate.</h2>
-            <p>xCover is designed so the pricing agent can make a decision without controlling user funds. The wallet signs money-moving transactions, while the contracts enforce the recorded decision and solvency rules.</p>
+            <h2>AI decides the price. Contracts control the money.</h2>
+            <p>The AI agent is the product's decision layer: it combines live Aave V3 evidence with a cited incident corpus, performs two independent risk assessments, and returns an attributable signed decision. It never controls user funds. Wallets authorize every transfer, while contracts enforce the recorded decision, full underwriting backing, position lifecycle, and deterministic claim rules.</p>
             <div class="docs-flow">
-              <div><span>01</span><strong>Read</strong><small>Aave V3 reserve and pool state</small></div>
-              <div><span>02</span><strong>Price</strong><small>Signed quote or signed refusal</small></div>
-              <div><span>03</span><strong>Enforce</strong><small>Registry, vault, pool, and resolver</small></div>
+              <div><span>01</span><strong>Read</strong><small>Live Aave V3 reserve and pool state</small></div>
+              <div><span>02</span><strong>Price</strong><small>AI-signed quote or refusal</small></div>
+              <div><span>03</span><strong>Enforce</strong><small>Atomic vault, backed pool, and resolver</small></div>
             </div>
           </section>
 
+          <section id="existing-aave" class="docs-section">
+            <div class="eyebrow">02 / EXISTING AAVE SUPPLIERS</div>
+            <h2>Move the amount you want protected into a linked position.</h2>
+            <p>An existing Aave V3 supplier can redeem the amount they want to protect from their direct Aave position back to USDT, request an xCover decision for that amount, and reopen it through xCover. The result is still a real Aave V3 supply position, but its owner, signed quote, premium, policy, and underwriting reservation are now linked by the xCover contracts.</p>
+            <ol class="docs-steps">
+              <li><strong>Redeem from the direct Aave position.</strong> Withdraw the chosen amount from Aave back to USDT in the user's wallet.</li>
+              <li><strong>Request and record an xCover decision.</strong> The agent prices the live reserve and the PricingRegistry makes the signed result public.</li>
+              <li><strong>Open through xCover.</strong> The vault resupplies that USDT to Aave and atomically attaches the policy and matching pool reservation.</li>
+            </ol>
+            <div class="callout blue-callout"><strong>Current boundary</strong><span>The deployed build does not attach cover in place to an arbitrary aUSDT balance held outside xCover. It requires the protected amount to open through xCover so the contracts can bind, size, and unwind the position honestly. In-place external aToken wrapping is a future extension.</span></div>
+          </section>
+
           <section id="depositor" class="docs-section">
-            <div class="eyebrow">02 / DEPOSITOR FLOW</div>
+            <div class="eyebrow">03 / DEPOSITOR FLOW</div>
             <h2>Open a covered USDT deposit.</h2>
             <ol class="docs-steps">
               <li><strong>Connect on X Layer.</strong> The dashboard checks the wallet network and offers to add or switch to chain 196.</li>
-              <li><strong>Request a live price.</strong> The service reads the configured mainnet deployment and returns a signed price or a refusal with reasons.</li>
-              <li><strong>Record the decision.</strong> The wallet submits the signed decision to the pricing registry, making it public and binding for the next step.</li>
-              <li><strong>Approve and open.</strong> The wallet approves USDT, then the vault opens the Aave-backed position with the quote hash attached.</li>
-              <li><strong>Read or exit.</strong> The dashboard reads the position and lets its owner exit the full position when the contract allows it.</li>
+              <li><strong>Request AI pricing.</strong> The service reads the live Aave V3 reserve, pool capacity, oracle state, and cited risk evidence, then returns a signed price or a signed refusal with reasons.</li>
+              <li><strong>Record the signed decision.</strong> The wallet submits it to the PricingRegistry, making the decision public, attributable, and binding for the next step.</li>
+              <li><strong>Approve and open atomically.</strong> The vault pulls the buyer's USDT, supplies it to the real Aave V3 venue, consumes the quote, mints the policy, and reserves matching pool capital in one covered-deposit transaction.</li>
+              <li><strong>Respect quote expiry.</strong> A quote is valid only until its recorded block and can be consumed only once for the exact asset and amount it priced.</li>
+              <li><strong>Read or exit.</strong> The dashboard reads the position and lets its owner exit the full position; an untriggered policy releases its pool reservation when it exits.</li>
             </ol>
           </section>
 
           <section id="underwriter" class="docs-section split-docs">
             <div>
-              <div class="eyebrow">03 / UNDERWRITING</div>
+              <div class="eyebrow">04 / UNDERWRITING</div>
               <h2>Capital stands behind the cover.</h2>
-              <p>Underwriters approve USDT to the pool and deposit capital for pool shares. Free capital is the amount available for new cover; outstanding cover is the amount already reserved.</p>
+              <p>Underwriters approve USDT to the pool and deposit capital for pool shares. The pool is fully backed: capital must always cover outstanding cover, and new policies cannot reserve more than free capital. Premium from covered positions returns to the pool.</p>
             </div>
             <div class="docs-note"><strong>Two transactions</strong><span>Approve USDT, then add pool funds.</span><strong>One exit path</strong><span>Withdraw shares when capital is free.</span></div>
           </section>
 
+          <section id="pricing" class="docs-section">
+            <div class="eyebrow">05 / AI PRICING</div>
+            <h2>The agent recommends; deterministic code and contracts enforce.</h2>
+            <p>The pricing service reads the live Aave reserve, oracle, liquidity, utilization, reserve configuration, pool capital, and outstanding cover. It retrieves cited evidence and runs two independent model assessments. Those assessments produce hazard factors, uncertainty, confidence, concerns, missing facts, and cited conclusions; deterministic code computes the premium and applies the configured operating bounds.</p>
+            <div class="docs-table">
+              <div><strong>Signed decision</strong><span>Every price or refusal is signed under EIP-712 by a key restricted to PRICER_ROLE.</span></div>
+              <div><strong>Canonical reasoning</strong><span>The decision commits to a canonical JSON document through a public decision hash.</span></div>
+              <div><strong>Public refusals</strong><span>Declines are recorded in the same registry history as accepted quotes instead of being hidden.</span></div>
+              <div><strong>No custody</strong><span>The pricing key cannot transfer assets, reserve capital, mint policies, alter claim evidence, or pay claims.</span></div>
+            </div>
+          </section>
+
           <section id="claims" class="docs-section">
-            <div class="eyebrow">04 / CLAIMS</div>
+            <div class="eyebrow">06 / CLAIMS</div>
             <h2>Observations create the evidence trail.</h2>
-            <p>Anyone can publish a fresh reserve observation. The resolver samples the venue and Aave state over time; a keeper does not decide whether a claim is valid. The deployed claim rules evaluate the recorded evidence and pay according to the policy terms.</p>
+            <p>Anyone can publish a fresh reserve observation. The resolver reads the venue and Aave state itself, so the observer chooses when to sample but cannot choose the values. The deterministic resolver evaluates the recorded evidence against the policy terms and pays according to the covered trigger; an AI model or privileged keeper does not decide whether a claim is valid.</p>
+            <div class="callout blue-callout"><strong>Waiting and observation</strong><span>Mainnet cover waits approximately 24 hours in blocks before activation, then requires the defined observation window and 30 samples before a claim can be evaluated.</span></div>
+            <div class="docs-table">
+              <div><strong>Reserve deficit</strong><span>A material Aave deficit is measured as a share of total supplied assets and pays the policy's pro-rata shortfall.</span></div>
+              <div><strong>Redemption failure</strong><span>Sustained liquidity below the policy threshold triggers the deployed full-cover redemption-failure path.</span></div>
+              <div><strong>Oracle failure/depeg</strong><span>A sustained below-bound or implausible price pays the shortfall fixed by the policy terms.</span></div>
+            </div>
             <div class="callout blue-callout"><strong>What the dashboard shows</strong><span>Reserve liquidity, deficit, supplied assets, pool capital, outstanding cover, and public registry counters.</span></div>
           </section>
 
           <section id="controls" class="docs-section">
-            <div class="eyebrow">05 / CONTROLS</div>
+            <div class="eyebrow">07 / CONTROLS</div>
             <h2>Refusal is a valid outcome.</h2>
             <div class="docs-table">
-              <div><strong>Reserve evidence</strong><span>Missing or inconsistent data can stop a quote.</span></div>
-              <div><strong>Pool capacity</strong><span>New cover cannot exceed available backing.</span></div>
-              <div><strong>Price validity</strong><span>Quotes expire at a block and must be recorded before deposit.</span></div>
-              <div><strong>Contract separation</strong><span>The pricer signs decisions; it cannot move pool funds or settle claims.</span></div>
+              <div><strong>Live Aave V3 integration</strong><span>Mainnet positions are supplied to the configured Aave V3 USDT reserve and reserve conditions are read from live sources.</span></div>
+              <div><strong>Fully backed underwriting</strong><span>Capital must cover outstanding cover; withdrawal is bounded by free capital.</span></div>
+              <div><strong>Atomic covered deposit</strong><span>Supply, quote consumption, policy minting, and capital reservation succeed together or revert together.</span></div>
+              <div><strong>Quote expiry</strong><span>Each signed decision expires at a block, is tied to an exact amount, and can back only one policy.</span></div>
+              <div><strong>Daily capacity limit</strong><span>New cover per reserve is capped per day, limiting concentration even when pool capacity remains.</span></div>
+              <div><strong>Waiting-period protection</strong><span>Cover activates only after the block-based waiting period, reducing adverse selection.</span></div>
+              <div><strong>Permissionless observations</strong><span>Anyone may submit a fresh sample; the resolver reads the values directly from Aave and the venue.</span></div>
+              <div><strong>Deterministic claims</strong><span>Fixed terms, observation windows, and on-chain reserve evidence determine whether and how much a claim pays.</span></div>
+              <div><strong>Contract separation</strong><span>The pricer signs decisions; it cannot move pool funds, mint policies, or settle claims.</span></div>
             </div>
             <p class="docs-disclaimer">Live pricing is currently marked provisional and unaudited while calibration continues. Treat the dashboard as a working protocol interface, not a promise of loss coverage.</p>
           </section>
 
           <section id="contracts" class="docs-section">
-            <div class="eyebrow">06 / LIVE DEPLOYMENT</div>
+            <div class="eyebrow">08 / LIVE DEPLOYMENT</div>
             <h2>Verify what you are using.</h2>
             <p>These addresses are loaded from the same deployment record that powers the dashboard.</p>
             <div id="contractList" class="contract-list"><span>Loading live contract addresses…</span></div>
+          </section>
+
+          <section id="limitations" class="docs-section">
+            <div class="eyebrow">09 / CURRENT LIMITATIONS</div>
+            <h2>What this release does not claim.</h2>
+            <div class="docs-table">
+              <div><strong>Provisional pricing</strong><span>Calibration is still in progress and the live service reports that status publicly.</span></div>
+              <div><strong>No independent audit</strong><span>Tests and invariants are not a substitute for an external security audit.</span></div>
+              <div><strong>No in-place aToken wrapping</strong><span>Existing suppliers must redeem the amount to USDT and reopen it through xCover.</span></div>
+              <div><strong>Full exit only</strong><span>Partial exits are disabled because resizing cover safely would require a new quote.</span></div>
+              <div><strong>Non-transferable position</strong><span>Vault shares and policy NFTs cannot move independently while ownership is address-linked.</span></div>
+              <div><strong>No fabricated mainnet claim</strong><span>A mainnet payout requires the real waiting period, observation history, and a covered Aave condition.</span></div>
+            </div>
+            <p class="docs-disclaimer">xCover is experimental cover software, not a representation of regulated insurance. Use only amounts you can afford to lose.</p>
           </section>
 
           <div class="docs-endcap"><a class="button primary" href="/#dashboard">Open the live dashboard <span>↗</span></a><a class="text-link dark-link" href="https://github.com/Lightlabs-main/xCover" target="_blank" rel="noreferrer">View source on GitHub ↗</a></div>

@@ -156,9 +156,27 @@ rather than a product bought alongside it.
 set prices manually in governance forums. Prices go stale, do not respond to
 utilisation or market conditions, and are not calibrated against outcomes.
 
-xCover addresses both: cover is minted with the deposit and paid for out of the
-yield that deposit already earns, and the price is set per-block by an agent
-reading live protocol state.
+xCover addresses both: cover is minted with the deposit, its premium accrues per
+block and is settled from the redeemed position assets on exit, and the price is
+set per-block by an agent reading live protocol state. Aave yield offsets that
+cost when available, but the implementation does not promise that yield will
+always exceed premium.
+
+### 2.2.1 Existing Aave suppliers
+
+The product also serves a user who already supplies USDT directly to Aave. In
+the deployed build, that user redeems the amount they want protected back to
+USDT and reopens it through `xCoverVault`. The vault then resupplies the USDT to
+Aave while atomically binding the position to its signed quote, policy, owner,
+premium, and reserved underwriting capital.
+
+The current contracts do not attach cover in place to an arbitrary aUSDT balance
+held outside xCover. There is no deployed external-aToken wrapping function.
+That limitation is structural: a policy must not claim to cover a position the
+vault cannot bind, size, or unwind. An in-place migration path would need to
+transfer and custody the aToken, prove its reserve and owner, and keep the policy
+and vault position synchronized; it is a future extension rather than a claim
+made by this release.
 
 ### 2.3 What is covered — three definable events
 

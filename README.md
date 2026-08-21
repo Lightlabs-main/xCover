@@ -329,18 +329,23 @@ See [`deployments/xlayer-mainnet.json`](deployments/xlayer-mainnet.json) for
 deployment transaction hashes and [`docs/deployments.md`](docs/deployments.md)
 for the deployment history, testnet lifecycle, and corrected contract set.
 
-## Safety model and current limitations
+## Operating terms and protocol status
 
-- The live deployment and pricing service are provisional and unaudited.
-- xCover is cover software, not a representation of regulated insurance.
-- Existing external aUSDT positions cannot currently be wrapped in place.
-- Vault shares and policy NFTs are non-transferable in this build.
-- Positions support full exit only; partial withdrawal is disabled.
-- Mainnet claims cannot be fabricated for a demonstration. They require the real
-  waiting period, observations, and a covered Aave condition.
-- Pricing calibration remains in progress; the live engine reports that status.
-- Contract invariants and tests reduce known implementation risk but are not a
-  substitute for an independent audit.
+- **Live pricing status.** Calibration remains in progress and the live engine
+  reports its provisional status publicly.
+- **Security status.** The contracts are unaudited; tests and invariants are
+  evidence of engineering work, not a substitute for an independent audit.
+- **Linked position ownership.** Existing external aUSDT positions are redeemed
+  to USDT and reopened through xCover so the Aave position, shares, and policy
+  remain contractually linked. Vault shares and policy NFTs are non-transferable
+  by design.
+- **Full-position lifecycle.** Positions support full exit only. Resizing cover
+  requires a fresh quote, so partial withdrawal is not enabled.
+- **Evidence-based settlement.** A mainnet claim requires the real waiting period,
+  observation history, and a covered Aave condition. Healthy Aave state produces
+  no payout.
+- xCover is experimental cover software, not a representation of regulated
+  insurance.
 
 ## Verification and tests
 
@@ -361,7 +366,7 @@ pnpm install
 PATH="$HOME/.foundry/bin:$PATH" pnpm test
 ```
 
-The current suite contains 140 Solidity tests plus the pricing-agent tests. Fork
+The current suite contains 141 Solidity tests plus the pricing-agent tests. Fork
 tests require an accessible X Layer mainnet RPC.
 
 ## Repository map

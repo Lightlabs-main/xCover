@@ -53,7 +53,7 @@
           <a href="#claims">When cover pays</a>
           <a href="#controls">Controls and limits</a>
           <a href="#contracts">Live contracts</a>
-          <a href="#limitations">Current limitations</a>
+          <a href="#terms">Operating terms</a>
         </aside>
 
         <article class="docs-article">
@@ -171,16 +171,15 @@
             <div id="contractList" class="contract-list"><span>Loading live contract addresses…</span></div>
           </section>
 
-          <section id="limitations" class="docs-section">
-            <div class="eyebrow">10 / CURRENT LIMITATIONS</div>
-            <h2>What this release does not claim.</h2>
+          <section id="terms" class="docs-section">
+            <div class="eyebrow">10 / OPERATING TERMS</div>
+            <h2>How the live protocol is designed to operate.</h2>
             <div class="docs-table">
-              <div><strong>Provisional pricing</strong><span>Calibration is still in progress and the live service reports that status publicly.</span></div>
-              <div><strong>No independent audit</strong><span>Tests and invariants are not a substitute for an external security audit.</span></div>
-              <div><strong>No in-place aToken wrapping</strong><span>Existing suppliers must redeem the amount to USDT and reopen it through xCover.</span></div>
-              <div><strong>Full exit only</strong><span>Partial exits are disabled because resizing cover safely would require a new quote.</span></div>
-              <div><strong>Non-transferable position</strong><span>Vault shares and policy NFTs cannot move independently while ownership is address-linked.</span></div>
-              <div><strong>No fabricated mainnet claim</strong><span>A mainnet payout requires the real waiting period, observation history, and a covered Aave condition.</span></div>
+              <div><strong>Live pricing status</strong><span>Calibration is in progress and the live pricing service reports its provisional status publicly.</span></div>
+              <div><strong>Security status</strong><span>The contracts are unaudited. Tests and invariants provide implementation evidence, not an independent audit.</span></div>
+              <div><strong>Linked position ownership</strong><span>Existing suppliers redeem to USDT and reopen through xCover so the Aave position, vault shares, and policy remain linked. Non-transferability is intentional.</span></div>
+              <div><strong>Full-position lifecycle</strong><span>Exit is full-position only because resizing cover safely requires a fresh quote.</span></div>
+              <div><strong>Evidence-based settlement</strong><span>Mainnet claims require the real waiting period, observation history, and a covered Aave condition. Healthy Aave state produces no payout.</span></div>
             </div>
             <p class="docs-disclaimer">xCover is experimental cover software, not a representation of regulated insurance. Use only amounts you can afford to lose.</p>
           </section>
